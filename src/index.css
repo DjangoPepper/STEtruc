@@ -1,0 +1,38 @@
+:root {
+  font-family: 'Share Tech Mono', 'IBM Plex Mono', 'Courier New', monospace;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  color: #F0F9FF;
+  background-color: #0D1B2E;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100dvh;
+  background: #0D1B2E;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #0A1628; }
+::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 99px; }
+
+/* Inputs & selects reset */
+input, select, textarea, button {
+  font-family: inherit;
+}
