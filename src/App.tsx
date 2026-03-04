@@ -813,7 +813,8 @@ function ImportPage() {
                 <div
                   onClick={() => setOpenOnglets((o) => !o)}
                   style={{ color: T.accent, fontWeight: 700, fontSize: 12, marginBottom: openOnglets ? 8 : 0, textTransform: "uppercase", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>🗂 Onglets ({sheetNames.length}) <span style={{ opacity: 0.5, fontSize: 10 }}>{openOnglets ? "▲" : "▼"}</span></span>
+                  <span>🗂 Onglets ({sheetNames.length})</span>
+                  <span style={{ opacity: 0.5, fontSize: 10 }}>{openOnglets ? "▲" : "▼"}</span>
                 </div>
                 {openOnglets && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {sheetNames.map((name) => (
@@ -842,20 +843,23 @@ function ImportPage() {
               return (
                 <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, border: `1px solid ${T.warning}55`, overflow: "hidden" }}>
                   <div style={{ padding: "10px 14px", background: T.bgDark, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                    <span
-                      onClick={() => setOpenAtypiques((o) => !o)}
-                      style={{ color: T.warning, fontWeight: 800, fontSize: 12, textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ color: T.warning, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
                       ⚠ Lignes atypiques ({atypical.length})
-                      <span style={{ opacity: 0.5, fontSize: 10 }}>{openAtypiques ? "▲" : "▼"}</span>
                     </span>
-                    <button
-                      onClick={() => setEditableRows((prev) => prev.filter((row) => !anomalyInfo.isAnomalous(row)))}
-                      style={{
-                        background: `${T.error}22`, border: `1px solid ${T.error}55`,
-                        borderRadius: 6, color: T.error, fontSize: 10, fontWeight: 700,
-                        cursor: "pointer", padding: "3px 8px", whiteSpace: "nowrap",
-                      }}
-                    >✕ Supprimer tout</button>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <button
+                        onClick={() => setEditableRows((prev) => prev.filter((row) => !anomalyInfo.isAnomalous(row)))}
+                        style={{
+                          background: `${T.error}22`, border: `1px solid ${T.error}55`,
+                          borderRadius: 6, color: T.error, fontSize: 10, fontWeight: 700,
+                          cursor: "pointer", padding: "3px 8px", whiteSpace: "nowrap",
+                        }}
+                      >✕ Supprimer tout</button>
+                      <span
+                        onClick={() => setOpenAtypiques((o) => !o)}
+                        style={{ opacity: 0.5, fontSize: 10, cursor: "pointer", color: T.warning, padding: "0 2px" }}
+                      >{openAtypiques ? "▲" : "▼"}</span>
+                    </div>
                   </div>
                   {openAtypiques && <div style={{ maxHeight: 220, overflowY: "auto" }}>
                     {atypical.map(({ row, ri }) => (
@@ -896,11 +900,8 @@ function ImportPage() {
                 padding: "10px 14px", background: T.bgDark,
                 display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
               }}>
-                <span
-                  onClick={() => setOpenHeaders((o) => !o)}
-                  style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
                   📋 Headers · {visibleCols.length}/{headers.length} colonnes
-                  <span style={{ opacity: 0.5, fontSize: 10 }}>{openHeaders ? "▲" : "▼"}</span>
                 </span>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                   <span style={{ color: T.textDim, fontSize: 10 }}>{parsed.rows.length} lignes</span>
@@ -923,6 +924,10 @@ function ImportPage() {
                       }}
                     >↺ Restaurer ({hiddenCols.size})</button>
                   )}
+                  <span
+                    onClick={() => setOpenHeaders((o) => !o)}
+                    style={{ opacity: 0.5, fontSize: 10, cursor: "pointer", color: T.textMuted, padding: "0 2px" }}
+                  >{openHeaders ? "▲" : "▼"}</span>
                 </div>
               </div>
               {openHeaders && <div style={{ padding: "10px 14px", display: "flex", gap: 6, flexWrap: "wrap" }}>
