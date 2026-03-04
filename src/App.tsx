@@ -17,7 +17,7 @@ import * as XLSX from "xlsx";
 
 type CellValue = string | number | boolean | null;
 type RawData = CellValue[][];
-type Tab = "import" | "tableau" | "export";
+type Tab = "import" | "tableau" | "rapport" | "export";
 type SelectMode = "none" | "col" | "row" | "dest";
 type SheetSelectMode = "none" | "delete" | "keep";
 
@@ -92,9 +92,9 @@ interface AppState {
   setAutoRefFmt: React.Dispatch<React.SetStateAction<boolean>>;
   poidsUnit: "t" | "kg";
   setPoidsUnit: React.Dispatch<React.SetStateAction<"t" | "kg">>;
-  // mapping (colonnes REF/Rang/Poids) + extras
-  mapping: { rang: string; reference: string; poids: string };
-  setMapping: React.Dispatch<React.SetStateAction<{ rang: string; reference: string; poids: string }>>;
+  // mapping (colonnes REF/Rang/Poids/Destination) + extras
+  mapping: { rang: string; reference: string; poids: string; dch: string };
+  setMapping: React.Dispatch<React.SetStateAction<{ rang: string; reference: string; poids: string; dch: string }>>;
   extras: { col: string; label: string }[];
   setExtras: React.Dispatch<React.SetStateAction<{ col: string; label: string }[]>>;
   // pointage tracking
@@ -198,8 +198,8 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   const [splitFormats, setSplitFormats] = useState<Record<string, string>>({});
   const [autoRefFmt, setAutoRefFmt] = useState(false);
   const [poidsUnit, setPoidsUnit] = useState<"t" | "kg">("t");
-  const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string }>({ rang: "", reference: "", poids: "" });
-  const [extras, setExtras] = useState<{ col: string; label: string }[]>([{ col: "", label: "PREPA" }]);
+  const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string; dch: string }>({ rang: "", reference: "", poids: "", dch: "" });
+  const [extras, setExtras] = useState<{ col: string; label: string }[]>([]);
   const [pointedRows, setPointedRows] = useState<Set<number>>(new Set());
   const [rowOverrides, setRowOverrides] = useState<Map<number, Record<number, CellValue>>>(new Map());
   const [destinations, setDestinations] = useState<Destination[]>([
@@ -270,7 +270,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       // Auto-select "winwin" sheet if it exists
       const winwinSheet = wb.SheetNames.find(s => s.toLowerCase() === "winwin");
       const defaultSheet = winwinSheet ?? wb.SheetNames[0];
-      if (winwinSheet) setWinwinModalOpen(true);
+      if (winwinSheet) { setWinwinModalOpen(true); setAutoRefFmt(true); }
       setActiveSheet(defaultSheet);
       setHiddenSheets(winwinSheet ? new Set(wb.SheetNames.filter(s => s !== winwinSheet)) : new Set());
       setSheetSelectMode("none");
@@ -404,6 +404,7 @@ function BottomNav() {
   const tabs: { id: Tab; icon: string; label: string }[] = [
     { id: "import",  icon: "⬇️",  label: "Import"  },
     { id: "tableau", icon: "📊",  label: "Pointage" },
+    { id: "rapport", icon: "📋",  label: "Rapport"  },
     { id: "export",  icon: "⬆️",  label: "Export"  },
   ];
   return (
@@ -415,7 +416,7 @@ function BottomNav() {
     }}>
       {tabs.map((t) => {
         const isActive = activeTab === t.id;
-        const disabled = (t.id === "tableau" || t.id === "export") && !parsed;
+        const disabled = (t.id === "tableau" || t.id === "rapport" || t.id === "export") && !parsed;
         return (
           <button
             key={t.id}
@@ -722,6 +723,7 @@ function ImportPage() {
     extras, setExtras,
     autoRefFmt, setAutoRefFmt,
     poidsUnit, setPoidsUnit,
+    winwinModalOpen, setWinwinModalOpen,
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -737,6 +739,14 @@ function ImportPage() {
   const [openDonnees,   setOpenDonnees]   = useState(false);
   const [openMapping,   setOpenMapping]   = useState(false);
   const [openApercu,    setOpenApercu]    = useState(false);
+  const suppressCollapseRef = useRef(false);
+
+  // Auto-close winwin modal after 3s
+  useEffect(() => {
+    if (!winwinModalOpen) return;
+    const t = setTimeout(() => setWinwinModalOpen(false), 3000);
+    return () => clearTimeout(t);
+  }, [winwinModalOpen]);
 
   // Re-initialize editableRows when the parsed data changes (new file or new sheet).
   // Headers intentionally excluded to avoid re-init when user renames columns.
@@ -757,16 +767,19 @@ function ImportPage() {
       rang:      headers.find((k) => /rang|row|line|ligne/i.test(k)) ?? "",
       reference: headers.find((k) => /ref|coil|serial|num|id|bobine/i.test(k)) ?? headers[0] ?? "",
       poids:     headers.find((k) => /poids|weight|kg|tonne|masse/i.test(k)) ?? "",
+      dch:       headers.find((k) => /dch|d[eé]chargement|dest(ination)?/i.test(k)) ?? "",
     });
-    const autoExtra = headers.find((k) => /prepa|zone|prep/i.test(k)) ?? "";
-    setExtras([{ col: autoExtra, label: "PREPA" }]);
+    setExtras([]);
     setStep((s) => (s === 1 ? 2 : s));
-    setOpenOnglets(false);
-    setOpenAtypiques(false);
-    setOpenHeaders(false);
-    setOpenDonnees(false);
-    setOpenMapping(false);
-    setOpenApercu(false);
+    if (!suppressCollapseRef.current) {
+      setOpenOnglets(false);
+      setOpenAtypiques(false);
+      setOpenHeaders(false);
+      setOpenDonnees(false);
+      setOpenMapping(false);
+      setOpenApercu(false);
+    }
+    suppressCollapseRef.current = false;
   }, [parsed, activeSheet]); // intentionally excludes `headers`
 
   const onFile = useCallback((file: File) => { handleFile(file); }, [handleFile]);
@@ -858,6 +871,23 @@ function ImportPage() {
 
   return (
     <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
+      {winwinModalOpen && (
+        <div
+          onClick={() => setWinwinModalOpen(false)}
+          style={{
+            position: "fixed", inset: 0, background: "#000000bb",
+            zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div style={{ borderRadius: 18, overflow: "hidden", boxShadow: "0 24px 80px #000000cc", maxWidth: 320, width: "90%" }}>
+            <img
+              src="/STEtruc/P1060411.JPG"
+              alt="winwin"
+              style={{ width: "100%", display: "block" }}
+            />
+          </div>
+        </div>
+      )}
       <PageHeader title="Import" subtitle="Chargez et configurez votre fichier Excel" />
 
       {/* ── Step indicator ── */}
@@ -1084,10 +1114,14 @@ function ImportPage() {
                   >↩ Header → ligne</button>
                   <button
                     onClick={() => {
-                      const newName = `Col${headers.length + 1}`;
+                      const newIdx = headers.length;
+                      const newName = `Col${newIdx + 1}`;
+                      suppressCollapseRef.current = true;
+                      setOpenHeaders(true);
                       setHeaders([...headers, newName]);
                       setEditableRows(prev => prev.map(row => ({ ...row, [newName]: "" })));
                       if (parsed) setParsed({ ...parsed, headers: [...parsed.headers, newName], rows: parsed.rows.map(r => [...r, null]) });
+                      setEditingHdr(newIdx);
                     }}
                     title="Ajouter une colonne vide en dernière position"
                     style={{
@@ -1258,6 +1292,7 @@ function ImportPage() {
                     { field: "rang"      as const, label: "📍 Rang" },
                     { field: "reference" as const, label: "🏷 Référence *" },
                     { field: "poids"     as const, label: "⚖️ Poids (t)" },
+                    { field: "dch"       as const, label: "🏗️ Destination" },
                   ] as { field: keyof typeof mapping; label: string }[]).map(({ field, label }) => (
                     <div key={field} style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>{label}</div>
@@ -1377,6 +1412,7 @@ function ImportPage() {
                           { key: "rang",      label: "📍 Rang",      color: T.textMuted },
                           { key: "reference", label: "🏷 Référence", color: T.text },
                           { key: "poids",     label: `⚖️ Poids (${poidsUnit})`, color: T.warning },
+                          { key: "dch",       label: "🏗️ Destination",  color: T.accent },
                           ...extras.map((e, i) => ({ key: `extra_${i}`, label: e.label || "EXTRA", color: T.success })),
                         ] as { key: string; label: string; color: string }[]).map(({ key, label }) => (
                           <th key={key} style={{ padding: "4px 6px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>
@@ -1434,8 +1470,12 @@ function ImportPage() {
                             {mapping.poids ? (() => {
                               const raw = parseFloat(row[mapping.poids] ?? "") || 0;
                               const val = poidsUnit === "kg" ? (raw * 1000).toFixed(0) : parseFloat(raw.toFixed(3)).toString();
-                              return applyGrouping(val + (poidsUnit === "kg" ? "kg" : "t"), splitFormats["poids"] || "");
+                              const poidsFmt = splitFormats["poids"] ?? (poidsUnit === "kg" ? "2 3 3" : "2");
+                              return applyGrouping(val + (poidsUnit === "kg" ? "kg" : "t"), poidsFmt);
                             })() : "—"}
+                          </td>
+                          <td style={{ color: T.accent, padding: "4px 6px", fontFamily: "monospace", fontSize: 11 }}>
+                            {mapping.dch ? applyGrouping(String(row[mapping.dch] ?? "").slice(0, 24), splitFormats["dch"] || "") || "—" : "—"}
                           </td>
                           {extras.map((e, i) => (
                             <td key={i} style={{ color: T.success, padding: "4px 6px", fontFamily: "monospace", fontSize: 11 }}>
@@ -1475,6 +1515,7 @@ function ImportPage() {
                   ["📍 Colonne Rang", mapping.rang || "— non mappé"],
                   ["🏷 Colonne Référence", mapping.reference || "— non mappé"],
                   ["⚖️ Colonne Poids", mapping.poids || "— non mappé"],
+                  ["🏗️ Colonne Destination", mapping.dch || "— non mappé"],
                   ["⚖️ Unité poids", poidsUnit === "kg" ? "Kilogrammes (kg)" : "Tonnes (t)"],
                   ["🔢 Réf. auto-groupée", autoRefFmt ? "Activé" : "Désactivé"],
                   ...extras.filter((e) => e.label.trim()).map((e) => [`🔖 ${e.label}`, e.col ? e.col : "+ colonne vide"]),
@@ -1574,9 +1615,10 @@ function TablePage() {
   const [pageIdx,     setPageIdx]     = useState(0);
   const [pageSize,    setPageSize]    = useState(20);
   const [modalRow,    setModalRow]    = useState<{ row: CellValue[]; rowNum: number; ri: number } | null>(null);
-  const [openToolbar, setOpenToolbar] = useState(true);
+  const [openToolbar, setOpenToolbar] = useState(false);
   const [openMouvements, setOpenMouvements] = useState(false);
   const [newDestName, setNewDestName] = useState("");
+  const [confirmClearDest, setConfirmClearDest] = useState(false);
 
   if (!parsed) {
     return (
@@ -1619,7 +1661,7 @@ function TablePage() {
   const visibleColCount = headers.filter((_, i) => !hiddenCols.has(i)).length;
   void visibleColCount; // kept for reference
 
-  // ── Column ordering: prepa last, destination renamed to DECHARGEMENT ──
+  // ── Column ordering: prepa last, destination column renamed to DEST ──
   const prepaIdx = headers.findIndex((h) => /^prepa$/i.test(h.trim()));
   const destIdx  = headers.findIndex((h) => /^dest(ination)?$/i.test(h.trim()));
   const visibleCols: number[] = headers
@@ -1632,6 +1674,7 @@ function TablePage() {
   if (mapping.rang)      { const i = headers.indexOf(mapping.rang);      if (i >= 0) mappingLabels.set(i, "📍 Rang"); }
   if (mapping.reference) { const i = headers.indexOf(mapping.reference); if (i >= 0) mappingLabels.set(i, "🏷 Référence"); }
   if (mapping.poids)     { const i = headers.indexOf(mapping.poids);     if (i >= 0) mappingLabels.set(i, `⚖️ Poids(${poidsUnit})`); }
+  if (mapping.dch)       { const i = headers.indexOf(mapping.dch);       if (i >= 0) mappingLabels.set(i, "🏗️ Destination"); }
   extras.forEach((ex) => {
     if (ex.col && ex.label.trim()) {
       const i = headers.indexOf(ex.col);
@@ -1639,7 +1682,7 @@ function TablePage() {
     }
   });
   const colLabel = (i: number): string =>
-    mappingLabels.get(i) ?? (i === destIdx ? "DECHARGEMENT" : headers[i]);
+    mappingLabels.get(i) ?? (i === destIdx ? "DEST" : headers[i]);
 
   // ── Filter / sort / paginate ──
   const baseRows = allRows
@@ -1674,6 +1717,7 @@ function TablePage() {
   // Indices des colonnes référence et poids
   const refColIdx   = mapping.reference ? headers.indexOf(mapping.reference)  : -1;
   const poidsColIdx = mapping.poids     ? headers.indexOf(mapping.poids)      : -1;
+  const dchColIdx   = mapping.dch       ? headers.indexOf(mapping.dch)        : -1;
 
   // Stats par destination
   const destStats = useMemo(() => {
@@ -1756,6 +1800,8 @@ function TablePage() {
     if (ci === poidsColIdx) return splitFormats["poids"]     ?? "";
     const rangIdx = mapping.rang ? headers.indexOf(mapping.rang) : -1;
     if (ci === rangIdx)     return splitFormats["rang"]      ?? "";
+    const dchIdx = mapping.dch ? headers.indexOf(mapping.dch) : -1;
+    if (ci === dchIdx)      return splitFormats["dch"]       ?? "";
     const exIdx = extras.findIndex((ex) => ex.col && headers.indexOf(ex.col) === ci);
     if (exIdx >= 0)         return splitFormats[`extra_${exIdx}`] ?? "";
     return "";
@@ -1970,11 +2016,6 @@ function TablePage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: "#A78BFA", letterSpacing: "0.04em" }}>Mouvements</span>
             <div style={{ display: "flex", gap: 6 }}>
-              <button
-                className={`ste-btn${selectMode === "dest" ? " active" : ""}`}
-                onClick={() => { setSelectMode(selectMode === "dest" ? "none" : "dest"); setSelectedItems(new Set()); }}
-                title="Cliquer une ligne pour lui assigner la destination sélectionnée"
-              >{selectMode === "dest" ? "✓ Affecter" : "Affecter"}</button>
               <button className="ste-btn" onClick={() => setOpenMouvements(false)} style={{ fontSize: 11 }}>✕</button>
             </div>
           </div>
@@ -1985,14 +2026,24 @@ function TablePage() {
               <button
                 key={d.name}
                 className="ste-btn"
-                onClick={() => setSelectedDest(selectedDest === d.name ? "" : d.name)}
+                onClick={() => {
+                  if (selectedDest === d.name && selectMode === "dest") {
+                    setSelectedDest("");
+                    setSelectMode("none");
+                  } else {
+                    setSelectedDest(d.name);
+                    setSelectMode("dest");
+                  }
+                }}
                 style={{
-                  background: selectedDest === d.name ? d.color : `${d.color}22`,
+                  background: selectedDest === d.name && selectMode === "dest" ? d.color : `${d.color}22`,
                   borderColor: d.color,
-                  color: selectedDest === d.name ? "#0F172A" : d.color,
+                  color: selectedDest === d.name && selectMode === "dest" ? "#0F172A" : d.color,
                   fontWeight: selectedDest === d.name ? 700 : 400,
                   minWidth: 36,
+                  outline: selectedDest === d.name && selectMode === "dest" ? `2px solid ${d.color}` : undefined,
                 }}
+                title={`Cliquer pour affecter les lignes à "${d.name}"`}
               >
                 {d.name}
                 {destStats.get(d.name) && (
@@ -2073,6 +2124,11 @@ function TablePage() {
               <tbody>
                 {destinations.filter(d => destStats.has(d.name)).map(d => {
                   const s = destStats.get(d.name)!;
+                  const poidsFmt = splitFormats["poids"] ?? (poidsUnit === "kg" ? "2 3 3" : "2");
+                  const fmtWeight = (w: number) => {
+                    const val = poidsUnit === "kg" ? (w * 1000).toFixed(0) : parseFloat(w.toFixed(3)).toString();
+                    return applyGrouping(val, poidsFmt);
+                  };
                   return (
                     <tr key={d.name}>
                       <td style={{ padding: "2px 6px 2px 0" }}>
@@ -2081,13 +2137,20 @@ function TablePage() {
                       <td style={{ textAlign: "right", padding: "2px 6px", color: T.text }}>{s.count}</td>
                       {poidsColIdx >= 0 && (
                         <td style={{ textAlign: "right", padding: "2px 0 2px 6px", color: T.warning }}>
-                          {parseFloat(s.weight.toFixed(3)).toString()}
+                          {fmtWeight(s.weight)}
                         </td>
                       )}
                     </tr>
                   );
                 })}
-                {destStats.size > 1 && (
+                {destStats.size > 1 && (() => {
+                  const poidsFmt = splitFormats["poids"] ?? (poidsUnit === "kg" ? "2 3 3" : "2");
+                  const totalW = [...destStats.values()].reduce((a, b) => a + b.weight, 0);
+                  const fmtTotal = () => {
+                    const val = poidsUnit === "kg" ? (totalW * 1000).toFixed(0) : parseFloat(totalW.toFixed(3)).toString();
+                    return applyGrouping(val, poidsFmt);
+                  };
+                  return (
                   <tr style={{ borderTop: `1px solid ${T.border}` }}>
                     <td style={{ padding: "2px 6px 2px 0", color: T.textDim, fontStyle: "italic" }}>Total</td>
                     <td style={{ textAlign: "right", padding: "2px 6px", color: T.accent, fontWeight: 700 }}>
@@ -2095,11 +2158,12 @@ function TablePage() {
                     </td>
                     {poidsColIdx >= 0 && (
                       <td style={{ textAlign: "right", padding: "2px 0 2px 6px", color: T.accent, fontWeight: 700 }}>
-                        {parseFloat([...destStats.values()].reduce((a, b) => a + b.weight, 0).toFixed(3)).toString()}
+                        {fmtTotal()}
                       </td>
                     )}
                   </tr>
-                )}
+                  );
+                })()}
               </tbody>
             </table>
           )}
@@ -2109,8 +2173,43 @@ function TablePage() {
             <button
               className="ste-btn danger"
               style={{ marginTop: 10, fontSize: 11 }}
-              onClick={() => setRowDestinations(new Map())}
+              onClick={() => setConfirmClearDest(true)}
             >✖ Effacer toutes les affectations</button>
+          )}
+          {confirmClearDest && (
+            <div
+              onClick={() => setConfirmClearDest(false)}
+              style={{
+                position: "fixed", inset: 0, background: "#000000aa",
+                zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: T.bgCard, border: `1px solid ${T.error}66`,
+                  borderRadius: 14, padding: "24px 20px", maxWidth: 320, width: "90%",
+                  boxShadow: "0 20px 60px #00000099",
+                }}
+              >
+                <div style={{ color: T.error, fontWeight: 800, fontSize: 15, marginBottom: 10 }}>⚠️ Confirmer la suppression</div>
+                <div style={{ color: T.textMuted, fontSize: 13, marginBottom: 20 }}>
+                  Toutes les affectations ({rowDestinations.size} ligne{rowDestinations.size > 1 ? "s" : ""}) seront effacées. Cette action est irréversible.
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    className="ste-btn"
+                    style={{ flex: 1 }}
+                    onClick={() => setConfirmClearDest(false)}
+                  >Annuler</button>
+                  <button
+                    className="ste-btn danger"
+                    style={{ flex: 1 }}
+                    onClick={() => { setRowDestinations(new Map()); setConfirmClearDest(false); }}
+                  >✖ Effacer</button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -2171,7 +2270,7 @@ function TablePage() {
                         <span
                           onDoubleClick={() => selectMode === "none" && setEditingHeader(ci)}
                           title="Double-cliquer pour renommer"
-                          style={{ flex: 1, ...(ci === poidsColIdx ? { whiteSpace: "nowrap", fontSize: 12 } : {}) }}
+                          style={{ flex: 1, ...(ci === poidsColIdx ? { whiteSpace: "nowrap", fontSize: 12 } : (ci === refColIdx || ci === destIdx || ci === dchColIdx) ? { fontSize: 13 } : {}) }}
                         >
                           {colLabel(ci)}
                         </span>
@@ -2251,9 +2350,13 @@ function TablePage() {
                       display = fmt ? applyGrouping(strVal, fmt) : strVal;
                     }
                     const isRep  = !isAdded && dimRepeated && strVal !== null && (repetitiveByCol.get(ci)?.has(strVal) ?? false);
+                    const isDestCol = ci === destIdx;
+                    const destCellVal = isDestCol && rowDest ? rowDest : null;
                     return (
-                      <td key={ci} title={strVal ?? ""} className={isRep ? "cell-rep" : ""}>
-                        {display ?? <span style={{ color: T.textDim }}>—</span>}
+                      <td key={ci} title={destCellVal ?? strVal ?? ""} className={isRep ? "cell-rep" : ""}>
+                        {isDestCol && destCellVal
+                          ? <span style={{ color: destColor ?? T.accent, fontWeight: 700, fontSize: 11 }}>{destCellVal}</span>
+                          : display ?? <span style={{ color: T.textDim }}>—</span>}
                       </td>
                     );
                   })}
@@ -2440,6 +2543,185 @@ function useFlushActiveSheet() {
       sheetStates.current.set(activeSheet, { parsed, headers, addedRows, hiddenCols, hiddenRows });
     }
   }, [activeSheet, parsed, headers, addedRows, hiddenCols, hiddenRows, sheetStates]);
+}
+
+// ─────────────────────────────────────────────
+// 7. PAGE RAPPORT
+// ─────────────────────────────────────────────
+
+function RapportPage() {
+  const {
+    parsed, headers, allRows, hiddenRows,
+    mapping, extras, splitFormats,
+    pointedRows,
+    destinations, rowDestinations,
+    poidsUnit, autoRefFmt,
+  } = useApp();
+
+  if (!parsed) {
+    return (
+      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
+        <PageHeader title="Rapport" />
+        <EmptyState icon="📋" text="Aucun fichier chargé" sub="Importez un fichier Excel d'abord" />
+      </div>
+    );
+  }
+
+  const poidsIdx    = mapping.poids ? headers.indexOf(mapping.poids) : -1;
+  const refIdx      = mapping.reference ? headers.indexOf(mapping.reference) : -1;
+  const rangIdx     = mapping.rang ? headers.indexOf(mapping.rang) : -1;
+  const poidsFmt    = splitFormats["poids"] ?? (poidsUnit === "kg" ? "2 3 3" : "2");
+  const unitLabel   = poidsUnit === "kg" ? "kg" : "t";
+
+  const fmtWeight = (w: number): string => {
+    const val = poidsUnit === "kg" ? (w * 1000).toFixed(0) : parseFloat(w.toFixed(3)).toString();
+    return applyGrouping(val, poidsFmt) + " " + unitLabel;
+  };
+
+  const visibleRows = allRows.map((row, ri) => ({ row, ri })).filter(({ ri }) => !hiddenRows.has(ri));
+
+  // Stats par destination
+  const destStatsMap = new Map<string, { count: number; weight: number }>();
+  for (const { row, ri } of visibleRows) {
+    const dest = rowDestinations.get(ri);
+    if (!dest) continue;
+    const w = poidsIdx >= 0 ? (parseFloat(String(row[poidsIdx] ?? "")) || 0) : 0;
+    const s = destStatsMap.get(dest) ?? { count: 0, weight: 0 };
+    destStatsMap.set(dest, { count: s.count + 1, weight: s.weight + w });
+  }
+
+  const totalPointed = pointedRows.size;
+  const totalAffected = rowDestinations.size;
+  const totalRows = visibleRows.length;
+  const totalWeight = poidsIdx >= 0
+    ? visibleRows.reduce((acc, { row }) => acc + (parseFloat(String(row[poidsIdx] ?? "")) || 0), 0)
+    : 0;
+  const affectedWeight = poidsIdx >= 0
+    ? [...rowDestinations.keys()].reduce((acc, ri) => {
+        const row = allRows[ri];
+        return acc + (row ? (parseFloat(String(row[poidsIdx] ?? "")) || 0) : 0);
+      }, 0)
+    : 0;
+
+  const extraCols = extras.filter(e => e.col && e.label.trim());
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
+      <PageHeader title="Rapport" subtitle="Synthèse pointage & mouvements" />
+
+      <div style={{ padding: "12px 12px 0" }}>
+
+        {/* Résumé général */}
+        <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid ${T.border2}`, padding: "12px 14px", marginBottom: 12 }}>
+          <div style={{ color: T.textMuted, fontWeight: 800, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>📊 Résumé</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
+            {[
+              { label: "Lignes totales",   val: String(totalRows),       color: T.text },
+              { label: "Pointées",          val: String(totalPointed),    color: T.success },
+              { label: "Affectées (dest.)", val: String(totalAffected),   color: "#A78BFA" },
+              ...(poidsIdx >= 0 ? [
+                { label: `Poids total`,     val: fmtWeight(totalWeight),  color: T.warning },
+                { label: `Poids affecté`,   val: fmtWeight(affectedWeight), color: "#A78BFA" },
+              ] : []),
+            ].map(({ label, val, color }) => (
+              <div key={label} style={{ background: T.bgDark, borderRadius: 8, padding: "8px 10px" }}>
+                <div style={{ color: T.textDim, fontSize: 10, marginBottom: 2 }}>{label}</div>
+                <div style={{ color, fontWeight: 700, fontSize: 14, fontFamily: "'Share Tech Mono', monospace" }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Tableau par destination */}
+        {destStatsMap.size > 0 && (
+          <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid #7C3AED66`, padding: "12px 14px", marginBottom: 12 }}>
+            <div style={{ color: "#A78BFA", fontWeight: 800, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>🏗️ Mouvements</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                  <th style={{ textAlign: "left", color: T.textDim, padding: "3px 8px 6px 0", fontWeight: 600 }}>Destination</th>
+                  <th style={{ textAlign: "right", color: T.textDim, padding: "3px 6px 6px", fontWeight: 600 }}>Qté</th>
+                  {poidsIdx >= 0 && <th style={{ textAlign: "right", color: T.textDim, padding: "3px 0 6px 6px", fontWeight: 600 }}>Poids ({unitLabel})</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {destinations.filter(d => destStatsMap.has(d.name)).map(d => {
+                  const s = destStatsMap.get(d.name)!;
+                  return (
+                    <tr key={d.name} style={{ borderBottom: `1px solid ${T.border2}33` }}>
+                      <td style={{ padding: "5px 8px 5px 0" }}>
+                        <span style={{ background: `${d.color}33`, borderLeft: `3px solid ${d.color}`, padding: "2px 8px", borderRadius: 4, color: d.color, fontWeight: 700 }}>{d.name}</span>
+                      </td>
+                      <td style={{ textAlign: "right", padding: "5px 6px", color: T.text, fontFamily: "monospace" }}>{s.count}</td>
+                      {poidsIdx >= 0 && <td style={{ textAlign: "right", padding: "5px 0 5px 6px", color: T.warning, fontFamily: "monospace" }}>{fmtWeight(s.weight)}</td>}
+                    </tr>
+                  );
+                })}
+                {destStatsMap.size > 1 && (
+                  <tr style={{ borderTop: `1px solid ${T.border}` }}>
+                    <td style={{ padding: "5px 8px 5px 0", color: T.textDim, fontStyle: "italic" }}>Total affecté</td>
+                    <td style={{ textAlign: "right", padding: "5px 6px", color: T.accent, fontWeight: 700, fontFamily: "monospace" }}>
+                      {[...destStatsMap.values()].reduce((a, b) => a + b.count, 0)}
+                    </td>
+                    {poidsIdx >= 0 && (
+                      <td style={{ textAlign: "right", padding: "5px 0 5px 6px", color: T.accent, fontWeight: 700, fontFamily: "monospace" }}>
+                        {fmtWeight([...destStatsMap.values()].reduce((a, b) => a + b.weight, 0))}
+                      </td>
+                    )}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Lignes pointées */}
+        {pointedRows.size > 0 && (
+          <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid ${T.success}44`, padding: "12px 14px", marginBottom: 12 }}>
+            <div style={{ color: T.success, fontWeight: 800, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>✅ Lignes pointées ({pointedRows.size})</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                  {rangIdx >= 0 && <th style={{ textAlign: "left", color: T.textDim, padding: "3px 6px 6px 0", fontWeight: 600 }}>📍 Rang</th>}
+                  {refIdx  >= 0 && <th style={{ textAlign: "left", color: T.textDim, padding: "3px 6px 6px", fontWeight: 600 }}>🏷 Référence</th>}
+                  {poidsIdx >= 0 && <th style={{ textAlign: "right", color: T.textDim, padding: "3px 0 6px 6px", fontWeight: 600 }}>Poids</th>}
+                  {extraCols.map(e => <th key={e.col} style={{ textAlign: "left", color: T.textDim, padding: "3px 6px 6px", fontWeight: 600 }}>{e.label}</th>)}
+                  <th style={{ textAlign: "right", color: T.textDim, padding: "3px 0 6px 6px", fontWeight: 600 }}>Dest.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.filter(({ ri }) => pointedRows.has(ri)).map(({ row, ri }) => {
+                  const dest = rowDestinations.get(ri);
+                  const destColor = dest ? (destinations.find(d => d.name === dest)?.color ?? T.accent) : null;
+                  const refRaw = refIdx >= 0 ? String(row[refIdx] ?? "").slice(0, 24) : "";
+                  const refDisplay = refIdx >= 0 ? (autoRefFmt ? autoFormatRef(refRaw, splitFormats["reference"] || "") : applyGrouping(refRaw, splitFormats["reference"] || "")) : "";
+                  return (
+                    <tr key={ri} style={{ borderBottom: `1px solid ${T.border2}22` }}>
+                      {rangIdx >= 0 && <td style={{ padding: "3px 6px 3px 0", color: T.textMuted, fontFamily: "monospace" }}>{applyGrouping(String(row[rangIdx] ?? ""), splitFormats["rang"] || "") || "—"}</td>}
+                      {refIdx  >= 0 && <td style={{ padding: "3px 6px", color: T.text, fontFamily: "monospace" }}>{refDisplay || "—"}</td>}
+                      {poidsIdx >= 0 && <td style={{ textAlign: "right", padding: "3px 0 3px 6px", color: T.warning, fontFamily: "monospace" }}>{fmtWeight(parseFloat(String(row[poidsIdx] ?? "")) || 0)}</td>}
+                      {extraCols.map(e => {
+                        const ci = headers.indexOf(e.col);
+                        return <td key={e.col} style={{ padding: "3px 6px", color: T.success, fontFamily: "monospace" }}>{ci >= 0 ? String(row[ci] ?? "") || "—" : "—"}</td>;
+                      })}
+                      <td style={{ textAlign: "right", padding: "3px 0 3px 6px" }}>
+                        {dest ? <span style={{ color: destColor ?? T.accent, fontWeight: 700, fontSize: 10 }}>{dest}</span> : <span style={{ color: T.textDim, fontSize: 10 }}>—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {destStatsMap.size === 0 && pointedRows.size === 0 && (
+          <EmptyState icon="📋" text="Aucune donnée de rapport" sub="Pointez des lignes ou affectez des destinations dans l'onglet Pointage" />
+        )}
+
+      </div>
+    </div>
+  );
 }
 
 function ExportPage() {
@@ -2674,6 +2956,7 @@ function AppInner() {
   const pages: Record<Tab, React.ReactNode> = {
     import:  <ImportPage />,
     tableau: <TablePage />,
+    rapport: <RapportPage />,
     export:  <ExportPage />,
   };
 
