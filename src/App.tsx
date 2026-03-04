@@ -617,10 +617,10 @@ function ImportPage() {
   const [splitFormats, setSplitFormats] = useState<Record<string, string>>({});
   const [splitEditingField, setSplitEditingField] = useState<string | null>(null);
   const [splitInputValue, setSplitInputValue] = useState("");
-  const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string; extra: string }>({
-    rang: "", reference: "", poids: "", extra: "",
+  const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string }>({
+    rang: "", reference: "", poids: "",
   });
-  const [extraLabel,  setExtraLabel]  = useState("PREPA");
+  const [extras, setExtras] = useState<{ col: string; label: string }[]>([{ col: "", label: "PREPA" }]);
   const [poidsUnit,   setPoidsUnit]   = useState<"t" | "kg">("t");
   const [openOnglets,   setOpenOnglets]   = useState(true);
   const [openAtypiques, setOpenAtypiques] = useState(true);
@@ -645,8 +645,9 @@ function ImportPage() {
       rang:      headers.find((k) => /rang|row|line|ligne/i.test(k)) ?? "",
       reference: headers.find((k) => /ref|coil|serial|num|id|bobine/i.test(k)) ?? headers[0] ?? "",
       poids:     headers.find((k) => /poids|weight|kg|tonne|masse/i.test(k)) ?? "",
-      extra:     headers.find((k) => /prepa|zone|prep/i.test(k)) ?? "",
     });
+    const autoExtra = headers.find((k) => /prepa|zone|prep/i.test(k)) ?? "";
+    setExtras([{ col: autoExtra, label: "PREPA" }]);
     setStep((s) => (s === 1 ? 2 : s));
   }, [parsed, activeSheet]); // intentionally excludes `headers`
 
@@ -685,6 +686,7 @@ function ImportPage() {
       });
       return updated;
     });
+    setExtras((exs) => exs.map((e) => e.col === oldName ? { ...e, col: trimmed } : e));
     setEditingHdr(null);
   }, [headers, setHeaders]);
 
@@ -1155,38 +1157,62 @@ function ImportPage() {
                     </div>
                   ))}
                 </div>
-                {/* Extra column */}
-                <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-                  <div style={{ flex: "0 0 120px" }}>
-                    <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Nom affiché</div>
-                    <input
-                      value={extraLabel}
-                      onChange={(e) => setExtraLabel(e.target.value)}
-                      placeholder="ex: PREPA"
-                      style={{
-                        width: "100%", background: T.bgCard, border: `1px solid ${T.border2}`,
-                        borderRadius: 8, color: T.accent, fontSize: 12, padding: "7px 8px",
-                        outline: "none", fontFamily: "'Share Tech Mono', monospace", boxSizing: "border-box",
-                      }}
-                    />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>+ Colonne supplémentaire</div>
-                    <select
-                      value={mapping.extra}
-                      onChange={(e) => setMapping((m) => ({ ...m, extra: e.target.value }))}
-                      style={{
-                        width: "100%", background: T.bgCard,
-                        border: `1px solid ${mapping.extra ? T.success : T.border2}`,
-                        borderRadius: 8, color: T.text, fontSize: 12, padding: "7px 6px",
-                        outline: "none", fontFamily: "'Share Tech Mono', monospace",
-                        boxSizing: "border-box",
-                      }}
-                    >
-                      <option value="">— Aucune —</option>
-                      {visibleCols.map(({ h }) => <option key={h} value={h}>{h}</option>)}
-                    </select>
-                  </div>
+                {/* Extra columns */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {extras.map((ex, idx) => (
+                    <div key={idx} style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+                      <div style={{ flex: "0 0 110px", minWidth: 0 }}>
+                        {idx === 0 && <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Nom affiché</div>}
+                        <input
+                          value={ex.label}
+                          onChange={(e) => setExtras((exs) => exs.map((x, i) => i === idx ? { ...x, label: e.target.value } : x))}
+                          placeholder="ex: PREPA"
+                          style={{
+                            width: "100%", background: T.bgCard, border: `1px solid ${T.border2}`,
+                            borderRadius: 8, color: T.accent, fontSize: 12, padding: "7px 8px",
+                            outline: "none", fontFamily: "'Share Tech Mono', monospace", boxSizing: "border-box",
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {idx === 0 && <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>+ Colonne supplémentaire</div>}
+                        <select
+                          value={ex.col}
+                          onChange={(e) => setExtras((exs) => exs.map((x, i) => i === idx ? { ...x, col: e.target.value } : x))}
+                          style={{
+                            width: "100%", background: T.bgCard,
+                            border: `1px solid ${ex.col ? T.success : T.border2}`,
+                            borderRadius: 8, color: T.text, fontSize: 12, padding: "7px 6px",
+                            outline: "none", fontFamily: "'Share Tech Mono', monospace",
+                            boxSizing: "border-box",
+                          }}
+                        >
+                          <option value="">— Aucune —</option>
+                          {visibleCols.map(({ h }) => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => setExtras((exs) => exs.filter((_, i) => i !== idx))}
+                        title="Supprimer cette colonne"
+                        style={{
+                          flexShrink: 0, background: `${T.error}22`,
+                          border: `1px solid ${T.error}55`, borderRadius: 7,
+                          color: T.error, fontSize: 13, cursor: "pointer",
+                          padding: "6px 9px", lineHeight: 1,
+                        }}
+                      >🗑</button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setExtras((exs) => [...exs, { col: "", label: "EXTRA" }])}
+                    style={{
+                      alignSelf: "flex-start",
+                      background: `${T.success}22`, border: `1px solid ${T.success}55`,
+                      borderRadius: 7, color: T.success, fontSize: 11, fontWeight: 700,
+                      cursor: "pointer", padding: "5px 12px",
+                      fontFamily: "'Share Tech Mono', monospace",
+                    }}
+                  >+ Colonne</button>
                 </div>
               </div>
             )}
@@ -1215,11 +1241,11 @@ function ImportPage() {
                     <thead>
                       <tr>
                         {([
-                          { key: "rang"      as const, label: "📍 Rang",      color: T.textMuted },
-                          { key: "reference" as const, label: "🏷 Référence", color: T.text },
-                          { key: "poids"     as const, label: `⚖️ Poids (${poidsUnit})`,     color: T.warning },
-                          ...(mapping.extra ? [{ key: "extra" as const, label: (extraLabel || "EXTRA"), color: T.success }] : []),
-                        ] as { key: keyof typeof mapping; label: string; color: string }[]).map(({ key, label }) => (
+                          { key: "rang",      label: "📍 Rang",      color: T.textMuted },
+                          { key: "reference", label: "🏷 Référence", color: T.text },
+                          { key: "poids",     label: `⚖️ Poids (${poidsUnit})`, color: T.warning },
+                          ...extras.filter((e) => e.col).map((e, i) => ({ key: `extra_${i}`, label: e.label || "EXTRA", color: T.success })),
+                        ] as { key: string; label: string; color: string }[]).map(({ key, label }) => (
                           <th key={key} style={{ padding: "4px 6px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>
                             {splitEditingField === key ? (
                               <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -1248,7 +1274,7 @@ function ImportPage() {
                               <span
                                 onClick={() => { setSplitEditingField(key); setSplitInputValue(splitFormats[key] || ""); }}
                                 title="Cliquer pour définir un groupement visuel (ex: 4 4 1)"
-                                style={{ color: splitFormats[key] ? T.success : T.accent, cursor: "pointer", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}
+                                style={{ color: splitFormats[key] ? T.success : key.startsWith("extra") ? T.success : T.accent, cursor: "pointer", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}
                               >
                                 {label}
                                 {splitFormats[key] && <span style={{ fontSize: 9, color: `${T.success}88`, fontFamily: "monospace" }}>[{splitFormats[key]}]</span>}
@@ -1275,11 +1301,11 @@ function ImportPage() {
                               return applyGrouping(val + (poidsUnit === "kg" ? "kg" : "t"), splitFormats["poids"] || "");
                             })() : "—"}
                           </td>
-                          {mapping.extra && (
-                            <td style={{ color: T.success, padding: "4px 6px", fontFamily: "monospace", fontSize: 11 }}>
-                              {applyGrouping(String(row[mapping.extra] ?? "").slice(0, 24), splitFormats["extra"] || "") || <span style={{ color: T.textDim }}>—</span>}
+                          {extras.filter((e) => e.col).map((e, i) => (
+                            <td key={i} style={{ color: T.success, padding: "4px 6px", fontFamily: "monospace", fontSize: 11 }}>
+                              {applyGrouping(String(row[e.col] ?? "").slice(0, 24), splitFormats[`extra_${i}`] || "") || <span style={{ color: T.textDim }}>—</span>}
                             </td>
-                          )}
+                          ))}
                         </tr>
                       ))}
                     </tbody>
@@ -1314,6 +1340,7 @@ function ImportPage() {
                   ["📍 Colonne Rang", mapping.rang || "— non mappé"],
                   ["🏷 Colonne Référence", mapping.reference || "— non mappé"],
                   ["⚖️ Colonne Poids", mapping.poids || "— non mappé"],
+                  ...extras.filter((e) => e.col).map((e) => [`🔖 ${e.label || "EXTRA"}`, e.col]),
                 ] as [string, string][]).map(([k, v]) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border2}33` }}>
                     <span style={{ color: T.textMuted, fontSize: 13 }}>{k}</span>
