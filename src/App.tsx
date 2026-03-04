@@ -18,8 +18,10 @@ import * as XLSX from "xlsx";
 type CellValue = string | number | boolean | null;
 type RawData = CellValue[][];
 type Tab = "import" | "tableau" | "export";
-type SelectMode = "none" | "col" | "row";
+type SelectMode = "none" | "col" | "row" | "dest";
 type SheetSelectMode = "none" | "delete" | "keep";
+
+type Destination = { name: string; color: string };
 
 interface ParsedData {
   headers: string[];
@@ -100,6 +102,16 @@ interface AppState {
   setPointedRows: React.Dispatch<React.SetStateAction<Set<number>>>;
   rowOverrides: Map<number, Record<number, CellValue>>;
   setRowOverrides: React.Dispatch<React.SetStateAction<Map<number, Record<number, CellValue>>>>;
+  // destination assignment (mouvements)
+  destinations: Destination[];
+  setDestinations: React.Dispatch<React.SetStateAction<Destination[]>>;
+  selectedDest: string;
+  setSelectedDest: React.Dispatch<React.SetStateAction<string>>;
+  rowDestinations: Map<number, string>;
+  setRowDestinations: React.Dispatch<React.SetStateAction<Map<number, string>>>;
+  // winwin modal
+  winwinModalOpen: boolean;
+  setWinwinModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
   // helpers
   loadSheet: (wb: XLSX.WorkBook, sheet: string) => void;
   handleFile: (file: File) => void;
@@ -190,6 +202,15 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   const [extras, setExtras] = useState<{ col: string; label: string }[]>([{ col: "", label: "PREPA" }]);
   const [pointedRows, setPointedRows] = useState<Set<number>>(new Set());
   const [rowOverrides, setRowOverrides] = useState<Map<number, Record<number, CellValue>>>(new Map());
+  const [destinations, setDestinations] = useState<Destination[]>([
+    { name: "H1", color: "#00c87a" },
+    { name: "H2", color: "#f447d1" },
+    { name: "H3", color: "#3cbefc" },
+    { name: "H4", color: "#ff9b2c" },
+  ]);
+  const [selectedDest, setSelectedDest] = useState<string>("");
+  const [rowDestinations, setRowDestinations] = useState<Map<number, string>>(new Map());
+  const [winwinModalOpen, setWinwinModalOpen] = useState(false);
 
   // Stockage de l'état de chaque onglet (persist entre changements d'onglet)
   const sheetStates = useRef<Map<string, SheetState>>(new Map());
@@ -246,14 +267,19 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       const wb = XLSX.read(data, { type: "array" });
       setWorkbook(wb);
       setSheetNames(wb.SheetNames);
-      setActiveSheet(wb.SheetNames[0]);
-      setHiddenSheets(new Set());
+      // Auto-select "winwin" sheet if it exists
+      const winwinSheet = wb.SheetNames.find(s => s.toLowerCase() === "winwin");
+      const defaultSheet = winwinSheet ?? wb.SheetNames[0];
+      if (winwinSheet) setWinwinModalOpen(true);
+      setActiveSheet(defaultSheet);
+      setHiddenSheets(winwinSheet ? new Set(wb.SheetNames.filter(s => s !== winwinSheet)) : new Set());
       setSheetSelectMode("none");
       setSelectedSheets(new Set());
       setPointedRows(new Set());
       setRowOverrides(new Map());
+      setRowDestinations(new Map());
       setSplitFormats({});
-      loadSheet(wb, wb.SheetNames[0]);
+      loadSheet(wb, defaultSheet);
     };
     reader.readAsArrayBuffer(file);
   }, [loadSheet]);
@@ -314,6 +340,10 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       extras, setExtras,
       pointedRows, setPointedRows,
       rowOverrides, setRowOverrides,
+      destinations, setDestinations,
+      selectedDest, setSelectedDest,
+      rowDestinations, setRowDestinations,
+      winwinModalOpen, setWinwinModalOpen,
       loadSheet, handleFile,
       allRows, repetitiveByCol,
       sheetStates,
@@ -501,8 +531,7 @@ function StatsBar() {
 
 // Infos fichier+stats en ligne (utilisé dans la barre unique de TablePage)
 function PointageInfos() {
-  const { parsed, addedRows, hiddenCols, hiddenRows, headers, fileName } = useApp();
-  const visibleCols = headers.filter((_, i) => !hiddenCols.has(i)).length;
+  const { parsed, addedRows, hiddenRows, fileName } = useApp();
   const allRows = parsed ? [...addedRows, ...parsed.rows] : [];
   const visibleRows = allRows.filter((_, i) => !hiddenRows.has(i)).length;
   return (
@@ -510,16 +539,13 @@ function PointageInfos() {
       {fileName && (
         <>
           <span style={{ color: "#7C3AED99", fontSize: 12 }}>·</span>
-          <span style={{ color: T.textMuted, fontSize: 11, fontFamily: "'Share Tech Mono', monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150 }}>
+          <span style={{ color: T.textMuted, fontSize: 11, fontFamily: "'Share Tech Mono', monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 100 }}>
             📄 {fileName}
           </span>
         </>
       )}
       {parsed && (
         <>
-          <span style={{ color: "#7C3AED99", fontSize: 12 }}>·</span>
-          <span style={{ color: T.accent, fontWeight: 900, fontSize: 11 }}>{visibleCols}</span>
-          <span style={{ color: T.textDim, fontSize: 10, letterSpacing: "0.06em" }}>COL</span>
           <span style={{ color: "#7C3AED99", fontSize: 12 }}>·</span>
           <span style={{ color: T.success, fontWeight: 900, fontSize: 11 }}>{visibleRows}</span>
           <span style={{ color: T.textDim, fontSize: 10, letterSpacing: "0.06em" }}>LIG</span>
@@ -1047,7 +1073,6 @@ function ImportPage() {
                   📋 Headers · {visibleCols.length}/{headers.length} colonnes
                 </span>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ color: T.textDim, fontSize: 10 }}>{parsed.rows.length} lignes</span>
                   <button
                     onClick={promoteHeaderToRow}
                     title="Convertir les headers en ligne de données et créer des noms génériques Col1, Col2…"
@@ -1057,6 +1082,20 @@ function ImportPage() {
                       cursor: "pointer", padding: "3px 8px", whiteSpace: "nowrap",
                     }}
                   >↩ Header → ligne</button>
+                  <button
+                    onClick={() => {
+                      const newName = `Col${headers.length + 1}`;
+                      setHeaders([...headers, newName]);
+                      setEditableRows(prev => prev.map(row => ({ ...row, [newName]: "" })));
+                      if (parsed) setParsed({ ...parsed, headers: [...parsed.headers, newName], rows: parsed.rows.map(r => [...r, null]) });
+                    }}
+                    title="Ajouter une colonne vide en dernière position"
+                    style={{
+                      background: `${T.accent}22`, border: `1px solid ${T.accent}55`,
+                      borderRadius: 6, color: T.accent, fontSize: 10, fontWeight: 700,
+                      cursor: "pointer", padding: "3px 8px", whiteSpace: "nowrap",
+                    }}
+                  >+ Col.</button>
                   {hiddenCols.size > 0 && (
                     <button
                       onClick={() => setHiddenCols(new Set())}
@@ -1511,18 +1550,21 @@ function ImportPage() {
 function TablePage() {
   const {
     parsed, headers, setHeaders,
-    hiddenCols, setHiddenCols, hiddenRows, setHiddenRows,
+    hiddenCols, setHiddenCols: _setHiddenCols, hiddenRows, setHiddenRows: _setHiddenRows,
     selectMode, setSelectMode, selectedItems, setSelectedItems,
     editingHeader, setEditingHeader,
     dimRepeated, setDimRepeated,
     allRows, repetitiveByCol, addedRows,
-    setActiveTab,
+    setActiveTab, showToast,
     splitFormats,
     mapping, extras,
     pointedRows, setPointedRows,
     rowOverrides, setRowOverrides,
     autoRefFmt, setAutoRefFmt,
     poidsUnit, setPoidsUnit,
+    destinations, setDestinations,
+    selectedDest, setSelectedDest,
+    rowDestinations, setRowDestinations,
   } = useApp();
 
   const [showAddRow,  setShowAddRow]  = useState(false);
@@ -1533,6 +1575,8 @@ function TablePage() {
   const [pageSize,    setPageSize]    = useState(20);
   const [modalRow,    setModalRow]    = useState<{ row: CellValue[]; rowNum: number; ri: number } | null>(null);
   const [openToolbar, setOpenToolbar] = useState(true);
+  const [openMouvements, setOpenMouvements] = useState(false);
+  const [newDestName, setNewDestName] = useState("");
 
   if (!parsed) {
     return (
@@ -1556,6 +1600,22 @@ function TablePage() {
     });
   };
 
+  const applyColAction = () => {
+    if (selectMode !== "col") return;
+    _setHiddenCols((prev) => new Set([...prev, ...selectedItems]));
+    setSelectedItems(new Set());
+    setSelectMode("none");
+    showToast(`${selectedItems.size} colonne(s) masquée(s)`, "info");
+  };
+
+  const applyRowDeletion = () => {
+    if (selectMode !== "row") return;
+    _setHiddenRows((prev) => new Set([...prev, ...selectedItems]));
+    setSelectedItems(new Set());
+    setSelectMode("none");
+    showToast(`${selectedItems.size} ligne(s) masquée(s)`, "info");
+  };
+
   const visibleColCount = headers.filter((_, i) => !hiddenCols.has(i)).length;
   void visibleColCount; // kept for reference
 
@@ -1571,7 +1631,7 @@ function TablePage() {
   const mappingLabels = new Map<number, string>();
   if (mapping.rang)      { const i = headers.indexOf(mapping.rang);      if (i >= 0) mappingLabels.set(i, "📍 Rang"); }
   if (mapping.reference) { const i = headers.indexOf(mapping.reference); if (i >= 0) mappingLabels.set(i, "🏷 Référence"); }
-  if (mapping.poids)     { const i = headers.indexOf(mapping.poids);     if (i >= 0) mappingLabels.set(i, `⚖️ Poids (${poidsUnit})`); }
+  if (mapping.poids)     { const i = headers.indexOf(mapping.poids);     if (i >= 0) mappingLabels.set(i, `⚖️ Poids(${poidsUnit})`); }
   extras.forEach((ex) => {
     if (ex.col && ex.label.trim()) {
       const i = headers.indexOf(ex.col);
@@ -1614,6 +1674,24 @@ function TablePage() {
   // Indices des colonnes référence et poids
   const refColIdx   = mapping.reference ? headers.indexOf(mapping.reference)  : -1;
   const poidsColIdx = mapping.poids     ? headers.indexOf(mapping.poids)      : -1;
+
+  // Stats par destination
+  const destStats = useMemo(() => {
+    const stats = new Map<string, { count: number; weight: number }>();
+    for (const [ri2, dest] of rowDestinations) {
+      if (!stats.has(dest)) stats.set(dest, { count: 0, weight: 0 });
+      const s = stats.get(dest)!;
+      s.count++;
+      if (poidsColIdx >= 0) {
+        const rw = allRows[ri2];
+        if (rw) {
+          const rawW = parseFloat(String(rw[poidsColIdx] ?? "")) || 0;
+          s.weight += poidsUnit === "kg" ? rawW * 1000 : rawW;
+        }
+      }
+    }
+    return stats;
+  }, [rowDestinations, allRows, poidsColIdx, poidsUnit]);
 
   // Largeur des colonnes — compression proportionnelle pour éviter le scroll
   const colWidths = useMemo(() => {
@@ -1814,49 +1892,228 @@ function TablePage() {
         <PointageInfos />
         {/* Séparateur */}
         <span style={{ color: "#7C3AED99", fontSize: 12, margin: "0 2px" }}>|</span>
-        {/* Label outils */}
-        <span style={{ fontSize: 10, color: "#A78BFA", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, flexShrink: 0 }}>Outils</span>
-        {/* Boutons outils */}
-        {openToolbar && (
-          <>
-            <div className={`dim-chip${dimRepeated ? " on" : ""}`} onClick={() => setDimRepeated((v) => !v)}>
-              <span className="dim-dot" />Rép.
-            </div>
-            <div
-              className={`dim-chip${autoRefFmt ? " on" : ""}`}
-              onClick={() => setAutoRefFmt((v) => !v)}
-              title="Formatage automatique des références"
-            >🔢 Réf.</div>
-            {poidsColIdx >= 0 && (
-              <button
-                className="ste-btn"
-                onClick={() => setPoidsUnit((u) => u === "t" ? "kg" : "t")}
-                style={{ color: poidsUnit === "kg" ? T.warning : undefined, borderColor: poidsUnit === "kg" ? `${T.warning}66` : undefined }}
-                title="Basculer tonnes / kilos"
-              >⚖️ {poidsUnit}</button>
-            )}
-            <button
-              className={`ste-btn${selectMode === "col" ? " active" : ""}`}
-              onClick={() => { setSelectMode(selectMode === "col" ? "none" : "col"); setSelectedItems(new Set()); }}
-            >{selectMode === "col" ? "✓ " : ""}Col.</button>
-            <button
-              className={`ste-btn${selectMode === "row" ? " active" : ""}`}
-              onClick={() => { setSelectMode(selectMode === "row" ? "none" : "row"); setSelectedItems(new Set()); }}
-            >{selectMode === "row" ? "✓ " : ""}Lig.</button>
-            {sortCol !== null && (
-              <button className="ste-btn" onClick={() => { setSortCol(null); setPageIdx(0); }}>✕ Tri</button>
-            )}
-            {Object.values(colFilters).some((v) => v.trim()) && (
-              <button className="ste-btn" onClick={() => { setColFilters({}); setPageIdx(0); }}>✕ Filtres</button>
-            )}
-          </>
-        )}
-        {/* Triangle retract à droite */}
-        <span
+        {/* Boutons Outils + Mouvement */}
+        <button
+          className={`ste-btn${openToolbar ? " active" : ""}`}
           onClick={() => setOpenToolbar((o) => !o)}
-          style={{ marginLeft: "auto", fontSize: 10, color: "#A78BFA", opacity: 0.7, cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
-        >{openToolbar ? "▲" : "▼"}</span>
+          style={{ marginLeft: "auto", flexShrink: 0 }}
+        >{openToolbar ? "✓ " : ""}Outils</button>
+        <button
+          className={`ste-btn${openMouvements ? " active" : ""}`}
+          onClick={() => setOpenMouvements((o) => !o)}
+          style={{ flexShrink: 0 }}
+        >{openMouvements ? "✓ " : ""}Mouvement</button>
       </div>
+
+      {/* Cadre Outils */}
+      {openToolbar && (
+        <div style={{
+          margin: "8px 12px 0",
+          padding: "10px 14px",
+          background: T.bgCard,
+          border: `1px solid #7C3AED66`,
+          borderRadius: 10,
+          display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center",
+        }}>
+          <div className={`dim-chip${dimRepeated ? " on" : ""}`} onClick={() => setDimRepeated((v) => !v)}>
+            <span className="dim-dot" />Rép.
+          </div>
+          <div
+            className={`dim-chip${autoRefFmt ? " on" : ""}`}
+            onClick={() => setAutoRefFmt((v) => !v)}
+            title="Formatage automatique des références"
+          >🔢 Réf.</div>
+          {poidsColIdx >= 0 && (
+            <button
+              className="ste-btn"
+              onClick={() => setPoidsUnit((u) => u === "t" ? "kg" : "t")}
+              style={{ color: poidsUnit === "kg" ? T.warning : undefined, borderColor: poidsUnit === "kg" ? `${T.warning}66` : undefined }}
+              title="Basculer tonnes / kilos"
+            >⚖️ {poidsUnit}</button>
+          )}
+          <button
+            className={`ste-btn${selectMode === "col" ? " active" : ""}`}
+            onClick={() => { setSelectMode(selectMode === "col" ? "none" : "col"); setSelectedItems(new Set()); }}
+          >{selectMode === "col" ? "✓ " : ""}Col.</button>
+          <button
+            className={`ste-btn${selectMode === "row" ? " active" : ""}`}
+            onClick={() => { setSelectMode(selectMode === "row" ? "none" : "row"); setSelectedItems(new Set()); }}
+          >{selectMode === "row" ? "✓ " : ""}Lig.</button>
+          {selectedItems.size > 0 && (
+            <button className="ste-btn danger" onClick={selectMode === "col" ? applyColAction : applyRowDeletion}>
+              {selectMode === "col" ? `Masquer ${selectedItems.size} col.` : `Masquer ${selectedItems.size} lig.`}
+            </button>
+          )}
+          {(hiddenCols.size > 0 || hiddenRows.size > 0) && (
+            <button className="ste-btn" onClick={() => { _setHiddenCols(new Set()); _setHiddenRows(new Set()); }}>↺</button>
+          )}
+          {sortCol !== null && (
+            <button className="ste-btn" onClick={() => { setSortCol(null); setPageIdx(0); }}>✕ Tri</button>
+          )}
+          {Object.values(colFilters).some((v) => v.trim()) && (
+            <button className="ste-btn" onClick={() => { setColFilters({}); setPageIdx(0); }}>✕ Filtres</button>
+          )}
+          <button className="ste-btn" style={{ marginLeft: "auto", fontSize: 11 }} onClick={() => setOpenToolbar(false)}>✕</button>
+        </div>
+      )}
+
+      {/* Cadre Mouvements */}
+      {openMouvements && (
+        <div style={{
+          margin: "8px 12px 0",
+          padding: "12px 14px",
+          background: T.bgCard,
+          border: `1px solid #7C3AED66`,
+          borderRadius: 10,
+        }}>
+          {/* En-tête */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#A78BFA", letterSpacing: "0.04em" }}>Mouvements</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                className={`ste-btn${selectMode === "dest" ? " active" : ""}`}
+                onClick={() => { setSelectMode(selectMode === "dest" ? "none" : "dest"); setSelectedItems(new Set()); }}
+                title="Cliquer une ligne pour lui assigner la destination sélectionnée"
+              >{selectMode === "dest" ? "✓ Affecter" : "Affecter"}</button>
+              <button className="ste-btn" onClick={() => setOpenMouvements(false)} style={{ fontSize: 11 }}>✕</button>
+            </div>
+          </div>
+
+          {/* Pills destinations */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+            {destinations.map(d => (
+              <button
+                key={d.name}
+                className="ste-btn"
+                onClick={() => setSelectedDest(selectedDest === d.name ? "" : d.name)}
+                style={{
+                  background: selectedDest === d.name ? d.color : `${d.color}22`,
+                  borderColor: d.color,
+                  color: selectedDest === d.name ? "#0F172A" : d.color,
+                  fontWeight: selectedDest === d.name ? 700 : 400,
+                  minWidth: 36,
+                }}
+              >
+                {d.name}
+                {destStats.get(d.name) && (
+                  <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.85 }}>
+                    ({destStats.get(d.name)!.count})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Ajoute destination */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            <input
+              value={newDestName}
+              onChange={e => setNewDestName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && newDestName.trim()) {
+                  const name = newDestName.trim();
+                  if (!destinations.some(d => d.name.toLowerCase() === name.toLowerCase())) {
+                    const colors = ["#00c87a","#f447d1","#3cbefc","#ff9b2c","#a78bfa","#f87171","#34d399","#fbbf24"];
+                    const color = colors[destinations.length % colors.length];
+                    setDestinations(prev => [...prev, { name, color }]);
+                  }
+                  setNewDestName("");
+                }
+              }}
+              placeholder="Nom destination"
+              style={{
+                flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6,
+                color: T.text, fontFamily: "'Share Tech Mono', monospace", fontSize: 12,
+                padding: "4px 8px", outline: "none",
+              }}
+            />
+            <button
+              className="ste-btn"
+              style={{ fontWeight: 700 }}
+              onClick={() => {
+                const name = newDestName.trim();
+                if (!name) return;
+                if (!destinations.some(d => d.name.toLowerCase() === name.toLowerCase())) {
+                  const colors = ["#00c87a","#f447d1","#3cbefc","#ff9b2c","#a78bfa","#f87171","#34d399","#fbbf24"];
+                  const color = colors[destinations.length % colors.length];
+                  setDestinations(prev => [...prev, { name, color }]);
+                }
+                setNewDestName("");
+              }}
+            >+</button>
+            {destinations.length > 0 && (
+              <button
+                className="ste-btn danger"
+                title="Supprimer la destination sélectionnée"
+                onClick={() => {
+                  if (!selectedDest) return;
+                  setDestinations(prev => prev.filter(d => d.name !== selectedDest));
+                  setRowDestinations(prev => {
+                    const next = new Map(prev);
+                    for (const [k, v] of next) { if (v === selectedDest) next.delete(k); }
+                    return next;
+                  });
+                  setSelectedDest("");
+                }}
+                disabled={!selectedDest}
+              >✕ Dest.</button>
+            )}
+          </div>
+
+          {/* Stats */}
+          {destStats.size > 0 && (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", color: T.textDim, padding: "2px 6px 4px 0", fontWeight: 600 }}>Dest.</th>
+                  <th style={{ textAlign: "right", color: T.textDim, padding: "2px 6px 4px", fontWeight: 600 }}>Q</th>
+                  {poidsColIdx >= 0 && <th style={{ textAlign: "right", color: T.textDim, padding: "2px 0 4px 6px", fontWeight: 600 }}>Poids ({poidsUnit})</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {destinations.filter(d => destStats.has(d.name)).map(d => {
+                  const s = destStats.get(d.name)!;
+                  return (
+                    <tr key={d.name}>
+                      <td style={{ padding: "2px 6px 2px 0" }}>
+                        <span style={{ background: `${d.color}33`, borderLeft: `3px solid ${d.color}`, padding: "1px 6px", borderRadius: 3, color: d.color, fontWeight: 600 }}>{d.name}</span>
+                      </td>
+                      <td style={{ textAlign: "right", padding: "2px 6px", color: T.text }}>{s.count}</td>
+                      {poidsColIdx >= 0 && (
+                        <td style={{ textAlign: "right", padding: "2px 0 2px 6px", color: T.warning }}>
+                          {parseFloat(s.weight.toFixed(3)).toString()}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+                {destStats.size > 1 && (
+                  <tr style={{ borderTop: `1px solid ${T.border}` }}>
+                    <td style={{ padding: "2px 6px 2px 0", color: T.textDim, fontStyle: "italic" }}>Total</td>
+                    <td style={{ textAlign: "right", padding: "2px 6px", color: T.accent, fontWeight: 700 }}>
+                      {[...destStats.values()].reduce((a, b) => a + b.count, 0)}
+                    </td>
+                    {poidsColIdx >= 0 && (
+                      <td style={{ textAlign: "right", padding: "2px 0 2px 6px", color: T.accent, fontWeight: 700 }}>
+                        {parseFloat([...destStats.values()].reduce((a, b) => a + b.weight, 0).toFixed(3)).toString()}
+                      </td>
+                    )}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {/* Effacer toutes les affectations */}
+          {rowDestinations.size > 0 && (
+            <button
+              className="ste-btn danger"
+              style={{ marginTop: 10, fontSize: 11 }}
+              onClick={() => setRowDestinations(new Map())}
+            >✖ Effacer toutes les affectations</button>
+          )}
+        </div>
+      )}
 
       {/* Status hints */}
       <div style={{ padding: "6px 12px 0", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -1869,12 +2126,6 @@ function TablePage() {
           <div style={{ flex: "1 1 100%", marginBottom: 4, padding: "6px 10px", background: "#1F0A0A", border: `1px solid ${T.error}55`, borderRadius: 6, fontSize: 11, color: T.error }}>
             → Cliquez les numéros de lignes à masquer, puis confirmez
           </div>
-        )}
-        <span style={{ color: T.textDim, fontSize: 10 }}>
-          {filteredRows.length} ligne{filteredRows.length !== 1 ? "s" : ""}
-        </span>
-        {dimRepeated && (
-          <span style={{ color: T.repeat, fontSize: 10 }}>◆ Répétitions signalées</span>
         )}
         {addedRows.length > 0 && (
           <span style={{ color: T.success, fontSize: 10 }}>+ {addedRows.length} ajoutée(s)</span>
@@ -1920,7 +2171,7 @@ function TablePage() {
                         <span
                           onDoubleClick={() => selectMode === "none" && setEditingHeader(ci)}
                           title="Double-cliquer pour renommer"
-                          style={{ flex: 1 }}
+                          style={{ flex: 1, ...(ci === poidsColIdx ? { whiteSpace: "nowrap", fontSize: 12 } : {}) }}
                         >
                           {colLabel(ci)}
                         </span>
@@ -1946,17 +2197,33 @@ function TablePage() {
               const isRowSel = selectMode === "row" && selectedItems.has(ri);
               const isAdded  = ri < addedRows.length;
               const isPointed = pointedRows.has(ri);
+              const rowDest = rowDestinations.get(ri);
+              const destColor = rowDest ? (destinations.find(d => d.name === rowDest)?.color ?? null) : null;
+              const rowStyle: React.CSSProperties = isPointed
+                ? { background: "#0A1F10", outline: `1px solid ${T.success}44`, ...(destColor ? { borderLeft: `4px solid ${destColor}` } : {}) }
+                : anomalyRowSet.has(ri)
+                  ? { background: "#1E0A0A", outline: `1px solid ${T.error}33`, ...(destColor ? { borderLeft: `4px solid ${destColor}` } : {}) }
+                  : destColor
+                    ? { borderLeft: `4px solid ${destColor}`, background: `${destColor}33` }
+                    : {};
               return (
                 <tr
                   key={ri}
                   className={`${isRowSel ? "row-sel" : ""} ${isAdded ? "added-row" : ""} ${selectMode === "none" ? "click-row" : ""}`}
-                style={isPointed
-                    ? { background: "#0A1F10", outline: `1px solid ${T.success}44` }
-                    : anomalyRowSet.has(ri)
-                      ? { background: "#1E0A0A", outline: `1px solid ${T.error}33` }
-                      : undefined}
+                  style={rowStyle}
                   onClick={() => {
                     if (selectMode === "row") { toggleSelectItem(ri); return; }
+                    if (selectMode === "dest") {
+                      if (selectedDest) {
+                        setRowDestinations((prev) => {
+                          const next = new Map(prev);
+                          if (next.get(ri) === selectedDest) next.delete(ri);
+                          else next.set(ri, selectedDest);
+                          return next;
+                        });
+                      }
+                      return;
+                    }
                     if (selectMode === "none") setModalRow({ row, rowNum: ri + 1, ri });
                   }}
                 >
