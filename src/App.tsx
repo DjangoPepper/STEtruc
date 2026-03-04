@@ -339,7 +339,7 @@ function BottomNav() {
   const { activeTab, setActiveTab, parsed } = useApp();
   const tabs: { id: Tab; icon: string; label: string }[] = [
     { id: "import",  icon: "⬇️",  label: "Import"  },
-    { id: "tableau", icon: "📊",  label: "Tableau" },
+    { id: "tableau", icon: "📊",  label: "Pointage" },
     { id: "export",  icon: "⬆️",  label: "Export"  },
   ];
   return (
@@ -1227,7 +1227,7 @@ function ImportPage() {
                 <Btn
                   onClick={() => { showToast("✅ Fichier prêt", "success"); setActiveTab("tableau"); }}
                   color={T.success} textColor="#0F172A" fullWidth
-                >📊 Voir le tableau →</Btn>
+                >📊 Voir le pointage →</Btn>
               </div>
             </div>
           );
@@ -1239,7 +1239,7 @@ function ImportPage() {
 }
 
 // ─────────────────────────────────────────────
-// 6. PAGE TABLEAU
+// 6. PAGE POINTAGE
 // ─────────────────────────────────────────────
 
 // Barre de navigation rapide entre onglets (usage dans TablePage)
@@ -1315,12 +1315,18 @@ function TablePage() {
     showToast, setActiveTab,
   } = useApp();
 
-  const [showAddRow, setShowAddRow] = useState(false);
+  const [showAddRow,  setShowAddRow]  = useState(false);
+  const [colFilters,  setColFilters]  = useState<Record<number, string>>({});
+  const [sortCol,     setSortCol]     = useState<number | null>(null);
+  const [sortDir,     setSortDir]     = useState<"asc" | "desc">("asc");
+  const [pageIdx,     setPageIdx]     = useState(0);
+  const [pageSize,    setPageSize]    = useState(20);
+  const [modalRow,    setModalRow]    = useState<{ row: CellValue[]; rowNum: number } | null>(null);
 
   if (!parsed) {
     return (
       <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
-        <PageHeader title="Tableau" />
+        <PageHeader title="Pointage" />
         <EmptyState icon="📁" text="Aucun fichier chargé" sub="Importez un fichier Excel d'abord" />
         <div style={{ padding: 16 }}>
           <Btn onClick={() => setActiveTab("import")} color={T.accent} textColor="#0F172A" fullWidth>
@@ -1356,38 +1362,105 @@ function TablePage() {
   };
 
   const visibleColCount = headers.filter((_, i) => !hiddenCols.has(i)).length;
-  const visibleRowCount = allRows.filter((_, i) => !hiddenRows.has(i)).length;
+  void visibleColCount; // kept for reference
 
-  // CSS injected via <style>
+  // ── Column ordering: prepa last, destination renamed to DECHARGEMENT ──
+  const prepaIdx = headers.findIndex((h) => /^prepa$/i.test(h.trim()));
+  const destIdx  = headers.findIndex((h) => /^dest(ination)?$/i.test(h.trim()));
+  const visibleCols: number[] = headers
+    .map((_, i) => i)
+    .filter((i) => !hiddenCols.has(i) && i !== prepaIdx);
+  if (prepaIdx >= 0 && !hiddenCols.has(prepaIdx)) visibleCols.push(prepaIdx);
+  const colLabel = (i: number): string =>
+    i === destIdx ? "DECHARGEMENT" : headers[i];
+
+  // ── Filter / sort / paginate ──
+  const baseRows = allRows
+    .map((row, ri) => ({ row, ri }))
+    .filter(({ ri }) => !hiddenRows.has(ri));
+
+  const filteredRows = baseRows.filter(({ row }) =>
+    visibleCols.every((ci) => {
+      const f = (colFilters[ci] ?? "").trim().toLowerCase();
+      if (!f) return true;
+      const cell = row[ci];
+      return cell !== null && String(cell).toLowerCase().includes(f);
+    })
+  );
+
+  const sortedRows = sortCol !== null
+    ? [...filteredRows].sort((a, b) => {
+        const va = a.row[sortCol] ?? "";
+        const vb = b.row[sortCol] ?? "";
+        const na = Number(va), nb = Number(vb);
+        const numCmp = !isNaN(na) && !isNaN(nb) ? na - nb : 0;
+        const cmp = numCmp !== 0 ? numCmp : String(va).localeCompare(String(vb));
+        return sortDir === "asc" ? cmp : -cmp;
+      })
+    : filteredRows;
+
+  const PAGE_SIZES = [10, 20, 40, 100, 200];
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const safePage   = Math.min(pageIdx, totalPages - 1);
+  const pageRows   = sortedRows.slice(safePage * pageSize, (safePage + 1) * pageSize);
+
+  const handleSortCol = (ci: number) => {
+    if (selectMode === "col") { toggleSelectItem(ci); return; }
+    if (selectMode !== "none") return;
+    if (sortCol === ci) setSortDir((d) => d === "asc" ? "desc" : "asc");
+    else { setSortCol(ci); setSortDir("asc"); }
+    setPageIdx(0);
+  };
+
   const css = `
-    .ste-table { border-collapse: collapse; width: 100%; font-size: 12px; }
-    .ste-table thead tr th {
+    .pt-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    .pt-table thead th {
       background: #131E2E; color: ${T.textMuted};
-      font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-      padding: 9px 12px; text-align: left;
-      border-bottom: 1px solid ${T.border};
+      font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase;
+      padding: 0; text-align: left;
+      border-bottom: 2px solid ${T.border};
+      border-right: 1px solid ${T.border}33;
       white-space: nowrap; position: sticky; top: 0; z-index: 2;
-      font-weight: 600;
+      font-weight: 700; vertical-align: top;
     }
-    .ste-table td {
-      padding: 7px 12px; border-bottom: 1px solid ${T.border}22;
+    .pt-table thead th .th-inner {
+      padding: 8px 10px 4px; display: flex; align-items: center; gap: 4px;
+      cursor: pointer; user-select: none; transition: color 0.12s;
+    }
+    .pt-table thead th .th-inner:hover { color: ${T.accent}; }
+    .pt-table thead th.th-sorted { background: #0F1F30; }
+    .pt-table thead th.th-sorted .th-inner { color: ${T.accent}; }
+    .pt-table thead th .th-filter { padding: 2px 6px 5px; }
+    .pt-table thead th .th-filter input {
+      width: 100%; background: ${T.bg}; border: 1px solid ${T.border}55;
+      border-radius: 4px; color: ${T.textMuted}; font-size: 10px;
+      padding: 2px 5px; outline: none; font-family: 'Share Tech Mono', monospace;
+      box-sizing: border-box;
+    }
+    .pt-table thead th .th-filter input:focus { border-color: ${T.accent}55; }
+    .pt-table th.th-num-h { background: #0E1826; border-right: 1px solid ${T.border};
+      width: 36px; min-width: 36px; text-align: center; position: sticky; top: 0;
+      z-index: 3; vertical-align: top; padding: 0; }
+    .pt-table td.td-num {
+      background: #0E1826; border-right: 1px solid ${T.border};
+      width: 36px; min-width: 36px; text-align: center;
+      color: ${T.textDim}; font-size: 10px; padding: 7px 4px;
+      white-space: nowrap; user-select: none;
+    }
+    .pt-table td {
+      padding: 7px 10px; border-bottom: 1px solid ${T.border}22;
+      border-right: 1px solid ${T.border}11;
       color: #C8D8E8; white-space: nowrap;
-      max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+      max-width: 180px; overflow: hidden; text-overflow: ellipsis;
     }
-    .ste-table tr:hover td { background: ${T.rowHover}; }
-    .ste-table tr.row-sel td { background: ${T.selRowBg} !important; color: ${T.selRowTxt}; }
-    .ste-table tr.added-row td { background: #0A1F10 !important; }
-    .ste-table tr.added-row:hover td { background: #0F2A18 !important; }
-
-    .th-num { background: #0E1826 !important; border-right: 1px solid ${T.border} !important; width: 38px; min-width: 38px; text-align: center !important; }
-    .td-num { color: ${T.textDim} !important; font-size: 11px !important; background: #0E1826 !important; border-right: 1px solid ${T.border} !important; min-width: 38px; width: 38px; text-align: center !important; user-select: none; }
-    .td-num.row-sel-click { cursor: pointer; }
-    .td-num.row-sel-click:hover { color: ${T.accent} !important; background: #1E3A5F !important; }
-
-    .th-col-sel { cursor: pointer; }
-    .th-col-sel:hover { background: #1A2D3D !important; color: ${T.accent} !important; }
-    .th-col-del { background: #2A0E0E !important; color: ${T.error} !important; border-bottom-color: ${T.error} !important; }
-
+    .pt-table tr:hover td, .pt-table tr:hover .td-num { background: ${T.rowHover}; }
+    .pt-table tr.row-sel td { background: ${T.selRowBg} !important; color: ${T.selRowTxt}; }
+    .pt-table tr.added-row td { background: #0A1F10 !important; }
+    .pt-table tr.click-row { cursor: pointer; }
+    .th-col-sel .th-inner { cursor: pointer; }
+    .th-col-sel .th-inner:hover { color: ${T.error} !important; }
+    .th-col-del { background: #2A0E0E !important; }
+    .th-col-del .th-inner { color: ${T.error} !important; }
     .cell-rep { color: ${T.repeat} !important; font-style: italic; background: ${T.repeatBg}; }
     .header-input {
       background: transparent; border: none; border-bottom: 1px solid ${T.accent};
@@ -1395,10 +1468,6 @@ function TablePage() {
       font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
       width: 100%; min-width: 50px; outline: none; padding: 2px 0;
     }
-    .header-txt { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-    .header-txt:hover .pencil { opacity: 1; }
-    .pencil { opacity: 0; font-size: 9px; color: ${T.accent}; transition: opacity 0.15s; }
-
     .ste-btn {
       font-family: 'Share Tech Mono', monospace; font-size: 11px; font-weight: 700;
       letter-spacing: 0.05em; padding: 7px 12px;
@@ -1410,185 +1479,185 @@ function TablePage() {
     .ste-btn.active { background: ${T.border}; border-color: ${T.accent}; color: ${T.accent}; }
     .ste-btn.danger { border-color: ${T.error}55; color: ${T.error}; }
     .ste-btn.danger:hover { background: #2A0E0E; }
-
     .dim-chip {
       display: flex; align-items: center; gap: 5px;
       font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
       color: ${T.textDim}; cursor: pointer; padding: 7px 10px;
       border: 1px solid ${T.border2}; border-radius: 7px; background: ${T.bgCard};
       transition: all 0.15s; user-select: none;
-      fontFamily: 'Share Tech Mono', monospace;
     }
     .dim-chip:hover { border-color: ${T.accent}; }
     .dim-chip.on { color: #A78BFA; border-color: #3D2A6A; background: #160F2A; }
     .dim-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-
-    .info-bar {
-      margin-bottom: 10px; padding: 7px 12px;
-      background: #0F2A1A; border: 1px solid #1A3A28;
-      border-radius: 7px; font-size: 11px; color: ${T.success};
+    .page-btn {
+      background: ${T.bgCard}; border: 1px solid ${T.border2}; border-radius: 5px;
+      color: ${T.textMuted}; font-family: 'Share Tech Mono', monospace; font-size: 11px;
+      padding: 4px 9px; cursor: pointer; transition: all 0.12s;
     }
-    .info-bar.del { background: #1F0A0A; border-color: #3A1515; color: ${T.error}; }
+    .page-btn:hover:not(:disabled) { border-color: ${T.accent}; color: ${T.accent}; }
+    .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .page-btn.cur { background: ${T.accent}22; border-color: ${T.accent}; color: ${T.accent}; font-weight: 700; }
+    .pt-modal-overlay {
+      position: fixed; inset: 0; background: #00000088; z-index: 200;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .pt-modal {
+      background: ${T.bgCard}; border: 1px solid ${T.border2}; border-radius: 14px;
+      max-width: 500px; width: 100%; max-height: 80dvh; overflow-y: auto;
+      box-shadow: 0 20px 60px #00000099;
+    }
+    .pt-modal-hdr {
+      padding: 14px 16px; background: ${T.bgDark}; border-bottom: 1px solid ${T.border};
+      border-radius: 14px 14px 0 0; display: flex; justify-content: space-between; align-items: center;
+      position: sticky; top: 0;
+    }
+    .pt-modal-row {
+      display: flex; gap: 10px; padding: 9px 16px; border-bottom: 1px solid ${T.border}22; align-items: flex-start;
+    }
+    .pt-modal-row:last-child { border-bottom: none; }
   `;
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: T.bg, paddingBottom: 64 }}>
       <style>{css}</style>
-
-      <PageHeader
-        title="Tableau"
-        subtitle={fileName ? `📄 ${fileName}` : undefined}
-      />
+      <PageHeader title="Pointage" subtitle={fileName ? `📄 ${fileName}` : undefined} />
       <StatsBar />
-
-      {/* Sélecteur d'onglets inline (si multi-sheets) */}
-      {sheetNames.length > 1 && (
-        <SheetSwitcher />
-      )}
+      {sheetNames.length > 1 && <SheetSwitcher />}
 
       {/* Toolbar */}
       <div style={{
-        padding: "10px 12px", background: T.bgDark,
-        borderBottom: `1px solid ${T.border}`,
+        padding: "10px 12px", background: T.bgDark, borderBottom: `1px solid ${T.border}`,
         display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center",
       }}>
-        {/* Dim chip */}
         <div className={`dim-chip${dimRepeated ? " on" : ""}`} onClick={() => setDimRepeated((v) => !v)}>
           <span className="dim-dot" />Répétitions
         </div>
-
-        {/* Add row */}
         <button className="ste-btn" onClick={() => setShowAddRow(true)}>+ Ligne</button>
-
-        {/* Col select */}
         <button
           className={`ste-btn${selectMode === "col" ? " active" : ""}`}
           onClick={() => { setSelectMode(selectMode === "col" ? "none" : "col"); setSelectedItems(new Set()); }}
-        >
-          {selectMode === "col" ? "✓ " : ""}Colonnes
-        </button>
-
-        {/* Row select */}
+        >{selectMode === "col" ? "✓ " : ""}Colonnes</button>
         <button
           className={`ste-btn${selectMode === "row" ? " active" : ""}`}
           onClick={() => { setSelectMode(selectMode === "row" ? "none" : "row"); setSelectedItems(new Set()); }}
-        >
-          {selectMode === "row" ? "✓ " : ""}Lignes
-        </button>
-
-        {/* Apply / confirm */}
+        >{selectMode === "row" ? "✓ " : ""}Lignes</button>
         {selectedItems.size > 0 && (
           <button className="ste-btn danger" onClick={selectMode === "col" ? applyColAction : applyRowDeletion}>
-            {selectMode === "col"
-              ? `Masquer ${selectedItems.size} col.`
-              : `Masquer ${selectedItems.size} ligne(s)`}
+            {selectMode === "col" ? `Masquer ${selectedItems.size} col.` : `Masquer ${selectedItems.size} ligne(s)`}
           </button>
         )}
-
-        {/* Restore */}
         {(hiddenCols.size > 0 || hiddenRows.size > 0) && (
           <button className="ste-btn" onClick={() => { setHiddenCols(new Set()); setHiddenRows(new Set()); }}>
             Restaurer tout
           </button>
         )}
+        {sortCol !== null && (
+          <button className="ste-btn" onClick={() => { setSortCol(null); setPageIdx(0); }}>✕ Tri</button>
+        )}
+        {Object.values(colFilters).some((v) => v.trim()) && (
+          <button className="ste-btn" onClick={() => { setColFilters({}); setPageIdx(0); }}>✕ Filtres</button>
+        )}
       </div>
 
-      {/* Hints */}
-      <div style={{ padding: "8px 12px 0" }}>
+      {/* Status hints */}
+      <div style={{ padding: "6px 12px 0", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         {selectMode === "col" && (
-          <div className="info-bar del">→ Cliquez les en-têtes à masquer, puis confirmez</div>
+          <div style={{ flex: "1 1 100%", marginBottom: 4, padding: "6px 10px", background: "#1F0A0A", border: `1px solid ${T.error}55`, borderRadius: 6, fontSize: 11, color: T.error }}>
+            → Cliquez les en-têtes à masquer, puis confirmez
+          </div>
         )}
         {selectMode === "row" && (
-          <div className="info-bar del">→ Cliquez les numéros de lignes à masquer, puis confirmez</div>
-        )}
-        {selectMode === "none" && (hiddenCols.size > 0 || hiddenRows.size > 0) && (
-          <div className="info-bar">
-            {hiddenCols.size > 0 && <span>{hiddenCols.size} col. masquée(s) · </span>}
-            {hiddenRows.size > 0 && <span>{hiddenRows.size} ligne(s) masquée(s)</span>}
+          <div style={{ flex: "1 1 100%", marginBottom: 4, padding: "6px 10px", background: "#1F0A0A", border: `1px solid ${T.error}55`, borderRadius: 6, fontSize: 11, color: T.error }}>
+            → Cliquez les numéros de lignes à masquer, puis confirmez
           </div>
         )}
-        {addedRows.length > 0 && selectMode === "none" && (
-          <div style={{ marginBottom: 8, fontSize: 10, color: T.success }}>
-            + {addedRows.length} ligne(s) ajoutée(s) manuellement
-          </div>
+        <span style={{ color: T.textDim, fontSize: 10 }}>
+          {filteredRows.length} ligne{filteredRows.length !== 1 ? "s" : ""}
+        </span>
+        {dimRepeated && (
+          <span style={{ color: T.repeat, fontSize: 10 }}>◆ Grises = répétitions</span>
         )}
-        {dimRepeated && visibleRowCount > 0 && (
-          <div style={{ marginBottom: 8, fontSize: 10, color: T.repeat, letterSpacing: "0.04em" }}>
-            ◆ Valeurs grisées = ≥35% des lignes de leur colonne
-          </div>
+        {addedRows.length > 0 && (
+          <span style={{ color: T.success, fontSize: 10 }}>+ {addedRows.length} ajoutée(s)</span>
         )}
       </div>
 
       {/* Table */}
       <div style={{
         flex: 1, overflowX: "auto", overflowY: "auto",
-        margin: "0 12px 12px", maxHeight: "calc(100dvh - 320px)",
+        margin: "8px 12px 0", maxHeight: "calc(100dvh - 340px)",
         border: `1px solid ${T.border}`, borderRadius: 8, background: T.bgCard,
       }}>
-        <table className="ste-table">
+        <table className="pt-table">
           <thead>
             <tr>
-              <th className="th-num">#</th>
-              {headers.map((h, ci) => {
-                if (hiddenCols.has(ci)) return null;
+              <th className="th-num-h">
+                <div style={{ padding: "8px 4px 4px", textAlign: "center", color: T.textDim, fontSize: 9 }}>#</div>
+                <div className="th-filter" />
+              </th>
+              {visibleCols.map((ci) => {
+                const isSortedCol = sortCol === ci;
                 const isSel = selectMode === "col" && selectedItems.has(ci);
-                const isEditing = editingHeader === ci;
                 let cls = selectMode === "col" ? "th-col-sel" : "";
                 if (isSel) cls += " th-col-del";
+                if (isSortedCol) cls += " th-sorted";
                 return (
-                  <th key={ci} className={cls}
-                    onClick={() => {
-                      if (selectMode === "col") { toggleSelectItem(ci); return; }
-                      if (selectMode === "none") setEditingHeader(ci);
-                    }}
-                  >
-                    {isEditing ? (
+                  <th key={ci} className={cls}>
+                    <div className="th-inner" onClick={() => handleSortCol(ci)}>
+                      {editingHeader === ci ? (
+                        <input
+                          className="header-input"
+                          value={headers[ci]}
+                          autoFocus
+                          onChange={(e) => { const next = [...headers]; next[ci] = e.target.value; setHeaders(next); }}
+                          onBlur={() => setEditingHeader(null)}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingHeader(null); }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span
+                          onDoubleClick={() => selectMode === "none" && setEditingHeader(ci)}
+                          title="Double-cliquer pour renommer"
+                          style={{ flex: 1 }}
+                        >
+                          {colLabel(ci)}
+                        </span>
+                      )}
+                      {isSortedCol && <span style={{ fontSize: 9, flexShrink: 0 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                    </div>
+                    <div className="th-filter">
                       <input
-                        className="header-input"
-                        value={headers[ci]}
-                        autoFocus
-                        onChange={(e) => {
-                          const next = [...headers];
-                          next[ci] = e.target.value;
-                          setHeaders(next);
-                        }}
-                        onBlur={() => setEditingHeader(null)}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingHeader(null); }}
+                        value={colFilters[ci] ?? ""}
+                        onChange={(e) => { setColFilters((p) => ({ ...p, [ci]: e.target.value })); setPageIdx(0); }}
+                        placeholder="…"
                         onClick={(e) => e.stopPropagation()}
                       />
-                    ) : (
-                      <span className="header-txt" title="Cliquer pour renommer">
-                        {h}
-                        {selectMode === "none" && <span className="pencil">✎</span>}
-                      </span>
-                    )}
+                    </div>
                   </th>
                 );
               })}
             </tr>
           </thead>
           <tbody>
-            {allRows.map((row, ri) => {
-              if (hiddenRows.has(ri)) return null;
+            {pageRows.map(({ row, ri }) => {
               const isRowSel = selectMode === "row" && selectedItems.has(ri);
-              const isAdded = ri < addedRows.length;
+              const isAdded  = ri < addedRows.length;
               return (
-                <tr key={ri} className={`${isRowSel ? "row-sel" : ""} ${isAdded ? "added-row" : ""}`}>
-                  <td
-                    className={`td-num${selectMode === "row" ? " row-sel-click" : ""}`}
-                    onClick={() => selectMode === "row" && toggleSelectItem(ri)}
-                    title={isAdded ? "Ligne ajoutée manuellement" : undefined}
-                  >
-                    {isAdded
-                      ? <span style={{ color: T.success, fontSize: 9 }}>+{ri + 1}</span>
-                      : ri + 1
-                    }
+                <tr
+                  key={ri}
+                  className={`${isRowSel ? "row-sel" : ""} ${isAdded ? "added-row" : ""} ${selectMode === "none" ? "click-row" : ""}`}
+                  onClick={() => {
+                    if (selectMode === "row") { toggleSelectItem(ri); return; }
+                    if (selectMode === "none") setModalRow({ row, rowNum: ri + 1 });
+                  }}
+                >
+                  <td className="td-num" title={isAdded ? "Ligne ajoutée" : undefined}>
+                    {isAdded ? <span style={{ color: T.success, fontSize: 9 }}>+{ri + 1}</span> : ri + 1}
                   </td>
-                  {headers.map((_, ci) => {
-                    if (hiddenCols.has(ci)) return null;
-                    const cell = row[ci] ?? null;
+                  {visibleCols.map((ci) => {
+                    const cell   = row[ci] ?? null;
                     const strVal = cell !== null ? String(cell) : null;
-                    const isRep = !isAdded && dimRepeated && strVal !== null && (repetitiveByCol.get(ci)?.has(strVal) ?? false);
+                    const isRep  = !isAdded && dimRepeated && strVal !== null && (repetitiveByCol.get(ci)?.has(strVal) ?? false);
                     return (
                       <td key={ci} title={strVal ?? ""} className={isRep ? "cell-rep" : ""}>
                         {strVal ?? <span style={{ color: T.textDim }}>—</span>}
@@ -1598,10 +1667,10 @@ function TablePage() {
                 </tr>
               );
             })}
-            {allRows.every((_, i) => hiddenRows.has(i)) && (
+            {pageRows.length === 0 && (
               <tr>
-                <td colSpan={visibleColCount + 1} style={{ textAlign: "center", padding: "32px", color: T.textDim }}>
-                  Toutes les lignes sont masquées
+                <td colSpan={visibleCols.length + 1} style={{ textAlign: "center", padding: "32px", color: T.textDim }}>
+                  Aucune ligne correspondante
                 </td>
               </tr>
             )}
@@ -1609,8 +1678,72 @@ function TablePage() {
         </table>
       </div>
 
+      {/* Pagination */}
+      <div style={{ margin: "8px 12px 4px", display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+        <button className="page-btn" onClick={() => setPageIdx(0)} disabled={safePage === 0}>«</button>
+        <button className="page-btn" onClick={() => setPageIdx((p) => Math.max(0, p - 1))} disabled={safePage === 0}>‹</button>
+        {Array.from({ length: totalPages }, (_, i) => i)
+          .filter((i) => Math.abs(i - safePage) <= 2 || i === 0 || i === totalPages - 1)
+          .reduce<(number | "…")[]>((acc, i, idx, arr) => {
+            if (idx > 0 && i - (arr[idx - 1] as number) > 1) acc.push("…");
+            acc.push(i);
+            return acc;
+          }, [])
+          .map((item, idx) =>
+            item === "…"
+              ? <span key={`e${idx}`} style={{ color: T.textDim, fontSize: 11 }}>…</span>
+              : <button key={item} className={`page-btn${item === safePage ? " cur" : ""}`} onClick={() => setPageIdx(item as number)}>{(item as number) + 1}</button>
+          )}
+        <button className="page-btn" onClick={() => setPageIdx((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1}>›</button>
+        <button className="page-btn" onClick={() => setPageIdx(totalPages - 1)} disabled={safePage >= totalPages - 1}>»</button>
+        <span style={{ color: T.textDim, fontSize: 10, margin: "0 4px" }}>|</span>
+        <select
+          value={pageSize}
+          onChange={(e) => { setPageSize(Number(e.target.value)); setPageIdx(0); }}
+          style={{ background: T.bgCard, border: `1px solid ${T.border2}`, borderRadius: 5, color: T.textMuted, fontFamily: "'Share Tech Mono', monospace", fontSize: 11, padding: "3px 6px", cursor: "pointer" }}
+        >
+          {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} / page</option>)}
+        </select>
+        <span style={{ color: T.textDim, fontSize: 10 }}>
+          {safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, sortedRows.length)} / {sortedRows.length}
+        </span>
+      </div>
+
       {/* Add row modal */}
       {showAddRow && <AddRowModal onClose={() => setShowAddRow(false)} />}
+
+      {/* Row detail modal */}
+      {modalRow && (
+        <div className="pt-modal-overlay" onClick={() => setModalRow(null)}>
+          <div className="pt-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="pt-modal-hdr">
+              <span style={{ color: T.accent, fontWeight: 800, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                Ligne #{modalRow.rowNum}
+              </span>
+              <button
+                onClick={() => setModalRow(null)}
+                style={{ background: "none", border: "none", color: T.textDim, fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 0 }}
+              >×</button>
+            </div>
+            <div>
+              {visibleCols.map((ci) => {
+                const val    = modalRow.row[ci];
+                const strVal = val !== null && val !== undefined ? String(val) : null;
+                return (
+                  <div key={ci} className="pt-modal-row">
+                    <span style={{ minWidth: 120, color: T.textDim, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", flexShrink: 0, paddingTop: 2 }}>
+                      {colLabel(ci)}
+                    </span>
+                    <span style={{ color: strVal ? T.text : T.textDim, fontSize: 13, fontFamily: "monospace", wordBreak: "break-all" }}>
+                      {strVal ?? "—"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
