@@ -623,9 +623,11 @@ function ImportPage() {
   const [splitFormats, setSplitFormats] = useState<Record<string, string>>({});
   const [splitEditingField, setSplitEditingField] = useState<string | null>(null);
   const [splitInputValue, setSplitInputValue] = useState("");
-  const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string }>({
-    rang: "", reference: "", poids: "",
+  const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string; extra: string }>({
+    rang: "", reference: "", poids: "", extra: "",
   });
+  const [extraLabel,  setExtraLabel]  = useState("PREPA");
+  const [poidsUnit,   setPoidsUnit]   = useState<"t" | "kg">("t");
   const [openOnglets,   setOpenOnglets]   = useState(true);
   const [openAtypiques, setOpenAtypiques] = useState(true);
   const [openHeaders,   setOpenHeaders]   = useState(true);
@@ -649,6 +651,7 @@ function ImportPage() {
       rang:      headers.find((k) => /rang|row|line|ligne/i.test(k)) ?? "",
       reference: headers.find((k) => /ref|coil|serial|num|id|bobine/i.test(k)) ?? headers[0] ?? "",
       poids:     headers.find((k) => /poids|weight|kg|tonne|masse/i.test(k)) ?? "",
+      extra:     headers.find((k) => /prepa|zone|prep/i.test(k)) ?? "",
     });
     setStep((s) => (s === 1 ? 2 : s));
   }, [parsed, activeSheet]); // intentionally excludes `headers`
@@ -1087,30 +1090,65 @@ function ImportPage() {
 
             {/* ── Column mapping selectors ── */}
             {visibleCols.length > 0 && (
-              <div style={{ marginBottom: 14, display: "flex", gap: 8 }}>
-                {([
-                  { field: "rang"      as const, label: "📍 Rang" },
-                  { field: "reference" as const, label: "🏷 Référence *" },
-                  { field: "poids"     as const, label: "⚖️ Poids (t)" },
-                ] as { field: keyof typeof mapping; label: string }[]).map(({ field, label }) => (
-                  <div key={field} style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>{label}</div>
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  {([
+                    { field: "rang"      as const, label: "📍 Rang" },
+                    { field: "reference" as const, label: "🏷 Référence *" },
+                    { field: "poids"     as const, label: "⚖️ Poids (t)" },
+                  ] as { field: keyof typeof mapping; label: string }[]).map(({ field, label }) => (
+                    <div key={field} style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>{label}</div>
+                      <select
+                        value={mapping[field]}
+                        onChange={(e) => setMapping((m) => ({ ...m, [field]: e.target.value }))}
+                        style={{
+                          width: "100%", background: T.bgCard,
+                          border: `1px solid ${mapping[field] ? T.accent : T.border2}`,
+                          borderRadius: 8, color: T.text, fontSize: 12, padding: "7px 6px",
+                          outline: "none", fontFamily: "'Share Tech Mono', monospace",
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        <option value="">— — —</option>
+                        {visibleCols.map(({ h }) => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                {/* Extra column */}
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                  <div style={{ flex: "0 0 120px" }}>
+                    <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>Nom affiché</div>
+                    <input
+                      value={extraLabel}
+                      onChange={(e) => setExtraLabel(e.target.value)}
+                      placeholder="ex: PREPA"
+                      style={{
+                        width: "100%", background: T.bgCard, border: `1px solid ${T.border2}`,
+                        borderRadius: 8, color: T.accent, fontSize: 12, padding: "7px 8px",
+                        outline: "none", fontFamily: "'Share Tech Mono', monospace", boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>+ Colonne supplémentaire</div>
                     <select
-                      value={mapping[field]}
-                      onChange={(e) => setMapping((m) => ({ ...m, [field]: e.target.value }))}
+                      value={mapping.extra}
+                      onChange={(e) => setMapping((m) => ({ ...m, extra: e.target.value }))}
                       style={{
                         width: "100%", background: T.bgCard,
-                        border: `1px solid ${mapping[field] ? T.accent : T.border2}`,
+                        border: `1px solid ${mapping.extra ? T.success : T.border2}`,
                         borderRadius: 8, color: T.text, fontSize: 12, padding: "7px 6px",
                         outline: "none", fontFamily: "'Share Tech Mono', monospace",
                         boxSizing: "border-box",
                       }}
                     >
-                      <option value="">— — —</option>
+                      <option value="">— Aucune —</option>
                       {visibleCols.map(({ h }) => <option key={h} value={h}>{h}</option>)}
                     </select>
                   </div>
-                ))}
+                </div>
               </div>
             )}
 
@@ -1119,7 +1157,19 @@ function ImportPage() {
               <div style={{ background: "#0C2D3A", borderRadius: 10, marginBottom: 14, overflow: "hidden", border: `1px solid #1A5F7A55` }}>
                 <div style={{ padding: "8px 12px", background: "#103848", borderBottom: `1px solid #1A5F7A55`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ color: T.textDim, fontSize: 11, textTransform: "uppercase", fontWeight: 700 }}>Aperçu — 5 premières lignes</span>
-                  <span style={{ color: T.textDim, fontSize: 10 }}>Cliquer sur un header pour grouper</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: T.textDim, fontSize: 10 }}>Cliquer sur un header pour grouper</span>
+                    <button
+                      onClick={() => setPoidsUnit((u) => u === "t" ? "kg" : "t")}
+                      style={{
+                        background: poidsUnit === "kg" ? `${T.warning}33` : T.bgDark,
+                        border: `1px solid ${T.warning}66`, borderRadius: 6,
+                        color: T.warning, fontSize: 10, fontWeight: 700,
+                        cursor: "pointer", padding: "2px 7px", fontFamily: "'Share Tech Mono', monospace",
+                      }}
+                      title="Basculer tonnes / kilos"
+                    >{poidsUnit === "t" ? "⚖️ t ⇄ kg" : "⚖️ kg ⇄ t"}</button>
+                  </div>
                 </div>
                 <div style={{ padding: 10, overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -1128,7 +1178,8 @@ function ImportPage() {
                         {([
                           { key: "rang"      as const, label: "📍 Rang",      color: T.textMuted },
                           { key: "reference" as const, label: "🏷 Référence", color: T.text },
-                          { key: "poids"     as const, label: "⚖️ Poids",     color: T.warning },
+                          { key: "poids"     as const, label: `⚖️ Poids (${poidsUnit})`,     color: T.warning },
+                          ...(mapping.extra ? [{ key: "extra" as const, label: (extraLabel || "EXTRA"), color: T.success }] : []),
                         ] as { key: keyof typeof mapping; label: string; color: string }[]).map(({ key, label }) => (
                           <th key={key} style={{ padding: "4px 6px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>
                             {splitEditingField === key ? (
@@ -1179,8 +1230,17 @@ function ImportPage() {
                             {mapping.reference ? applyGrouping(String(row[mapping.reference] ?? "").slice(0, 28), splitFormats["reference"] || "") || "—" : "—"}
                           </td>
                           <td style={{ color: T.warning, padding: "4px 6px", fontFamily: "monospace" }}>
-                            {mapping.poids ? applyGrouping((parseFloat(row[mapping.poids] ?? "") || 0).toFixed(2) + "t", splitFormats["poids"] || "") : "—"}
+                            {mapping.poids ? (() => {
+                              const raw = parseFloat(row[mapping.poids] ?? "") || 0;
+                              const val = poidsUnit === "kg" ? (raw * 1000).toFixed(0) : raw.toFixed(3);
+                              return applyGrouping(val + (poidsUnit === "kg" ? "kg" : "t"), splitFormats["poids"] || "");
+                            })() : "—"}
                           </td>
+                          {mapping.extra && (
+                            <td style={{ color: T.success, padding: "4px 6px", fontFamily: "monospace", fontSize: 11 }}>
+                              {applyGrouping(String(row[mapping.extra] ?? "").slice(0, 24), splitFormats["extra"] || "") || <span style={{ color: T.textDim }}>—</span>}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
