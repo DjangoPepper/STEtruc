@@ -841,8 +841,8 @@ function ImportPage() {
                 .filter(({ row }) => anomalyInfo.isAnomalous(row));
               if (atypical.length === 0) return null;
               return (
-                <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, border: `1px solid ${T.warning}55`, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 14px", background: T.bgDark, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <div style={{ marginBottom: 14, background: "#1E1433", borderRadius: 12, border: `1px solid ${T.warning}55`, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 14px", background: "#140D24", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                     <span style={{ color: T.warning, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
                       ⚠ Lignes atypiques ({atypical.length})
                     </span>
@@ -866,7 +866,7 @@ function ImportPage() {
                       <div key={ri} style={{
                         display: "flex", alignItems: "center", gap: 8,
                         padding: "7px 14px", borderBottom: `1px solid ${T.border}22`,
-                        background: "#7C150811",
+                        background: "#5B21B611",
                       }}>
                         <span style={{ color: T.warning, fontSize: 12, flexShrink: 0 }}>⚠</span>
                         <div style={{ flex: 1, display: "flex", gap: 8, flexWrap: "wrap", overflow: "hidden" }}>
@@ -895,9 +895,9 @@ function ImportPage() {
             })()}
 
             {/* Headers editor */}
-            <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
+            <div style={{ marginBottom: 14, background: "#2A1020", borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
               <div style={{
-                padding: "10px 14px", background: T.bgDark,
+                padding: "10px 14px", background: "#1C0A16",
                 display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
               }}>
                 <span style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
@@ -1116,8 +1116,8 @@ function ImportPage() {
 
             {/* ── Preview : 5 first rows (mapped columns) ── */}
             {editableRows.length > 0 && (
-              <div style={{ background: T.bgDark, borderRadius: 10, marginBottom: 14, overflow: "hidden", border: `1px solid ${T.border2}` }}>
-                <div style={{ padding: "8px 12px", background: T.bgCard, borderBottom: `1px solid ${T.border2}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ background: "#0B2318", borderRadius: 10, marginBottom: 14, overflow: "hidden", border: `1px solid ${T.border2}` }}>
+                <div style={{ padding: "8px 12px", background: "#0F2E21", borderBottom: `1px solid ${T.border2}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ color: T.textDim, fontSize: 11, textTransform: "uppercase", fontWeight: 700 }}>Aperçu — 5 premières lignes</span>
                   <span style={{ color: T.textDim, fontSize: 10 }}>Cliquer sur un header pour grouper</span>
                 </div>
