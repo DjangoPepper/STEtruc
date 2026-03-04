@@ -623,6 +623,9 @@ function ImportPage() {
   const [splitFormats, setSplitFormats] = useState<Record<string, string>>({});
   const [splitEditingField, setSplitEditingField] = useState<string | null>(null);
   const [splitInputValue, setSplitInputValue] = useState("");
+  const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string }>({
+    rang: "", reference: "", poids: "",
+  });
 
   // Re-initialize editableRows when the parsed data changes (new file or new sheet).
   // Headers intentionally excluded to avoid re-init when user renames columns.
@@ -638,6 +641,12 @@ function ImportPage() {
     });
     setEditableRows(rows20);
     setSplitFormats({});
+    // Auto-detect column mapping from header names
+    setMapping({
+      rang:      headers.find((k) => /rang|row|line|ligne/i.test(k)) ?? "",
+      reference: headers.find((k) => /ref|coil|serial|num|id|bobine/i.test(k)) ?? headers[0] ?? "",
+      poids:     headers.find((k) => /poids|weight|kg|tonne|masse/i.test(k)) ?? "",
+    });
     setStep((s) => (s === 1 ? 2 : s));
   }, [parsed, activeSheet]); // intentionally excludes `headers`
 
@@ -668,6 +677,13 @@ function ImportPage() {
       next[trimmed] = prev[oldName];
       delete next[oldName];
       return next;
+    });
+    setMapping((m) => {
+      const updated = { ...m };
+      (Object.keys(updated) as (keyof typeof updated)[]).forEach((k) => {
+        if (updated[k] === oldName) updated[k] = trimmed;
+      });
+      return updated;
     });
     setEditingHdr(null);
   }, [headers, setHeaders]);
@@ -999,8 +1015,33 @@ function ImportPage() {
               </div>
             )}
 
-            {/* ── Preview : 5 first rows with grouping applied ── */}
-            {editableRows.length > 0 && visibleCols.length > 0 && (
+            {/* ── Column mapping selectors ── */}
+            {visibleCols.length > 0 && ([
+              { field: "rang"      as const, label: "📍 Colonne Rang" },
+              { field: "reference" as const, label: "🏷 Colonne Référence *" },
+              { field: "poids"     as const, label: "⚖️ Colonne Poids (tonnes)" },
+            ].map(({ field, label }) => (
+              <div key={field} style={{ marginBottom: 10 }}>
+                <div style={{ color: T.textMuted, fontSize: 12, marginBottom: 4, fontWeight: 600 }}>{label}</div>
+                <select
+                  value={mapping[field]}
+                  onChange={(e) => setMapping((m) => ({ ...m, [field]: e.target.value }))}
+                  style={{
+                    width: "100%", background: T.bgCard,
+                    border: `1px solid ${mapping[field] ? T.accent : T.border2}`,
+                    borderRadius: 8, color: T.text, fontSize: 14, padding: "10px 12px",
+                    outline: "none", fontFamily: "'Share Tech Mono', monospace",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <option value="">— Ignorer —</option>
+                  {visibleCols.map(({ h }) => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </div>
+            )))}
+
+            {/* ── Preview : 5 first rows (mapped columns) ── */}
+            {editableRows.length > 0 && (
               <div style={{ background: T.bgDark, borderRadius: 10, marginBottom: 14, overflow: "hidden", border: `1px solid ${T.border2}` }}>
                 <div style={{ padding: "8px 12px", background: T.bgCard, borderBottom: `1px solid ${T.border2}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ color: T.textDim, fontSize: 11, textTransform: "uppercase", fontWeight: 700 }}>Aperçu — 5 premières lignes</span>
@@ -1010,12 +1051,46 @@ function ImportPage() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                     <thead>
                       <tr>
-                        {visibleCols.slice(0, 5).map(({ h, i }) => (
-                          <th key={i} style={{ padding: "4px 6px", textAlign: "left", borderBottom: `1px solid ${T.border}`, color: splitFormats[h] ? T.success : T.accent, cursor: "pointer", fontWeight: 700 }}
-                            onClick={() => { setSplitEditingField(h); setSplitInputValue(splitFormats[h] || ""); }}
-                          >
-                            {h}
-                            {splitFormats[h] && <span style={{ fontSize: 9, marginLeft: 4, opacity: 0.6, fontFamily: "monospace" }}>[{splitFormats[h]}]</span>}
+                        {([
+                          { key: "rang"      as const, label: "📍 Rang",      color: T.textMuted },
+                          { key: "reference" as const, label: "🏷 Référence", color: T.text },
+                          { key: "poids"     as const, label: "⚖️ Poids",     color: T.warning },
+                        ] as { key: keyof typeof mapping; label: string; color: string }[]).map(({ key, label }) => (
+                          <th key={key} style={{ padding: "4px 6px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>
+                            {splitEditingField === key ? (
+                              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                                <input
+                                  autoFocus
+                                  value={splitInputValue}
+                                  onChange={(e) => setSplitInputValue(e.target.value)}
+                                  placeholder="ex: 4 4 1"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") { setSplitFormats((p) => ({ ...p, [key]: splitInputValue })); setSplitEditingField(null); }
+                                    if (e.key === "Escape") setSplitEditingField(null);
+                                  }}
+                                  onBlur={() => { setSplitFormats((p) => ({ ...p, [key]: splitInputValue })); setSplitEditingField(null); }}
+                                  style={{
+                                    background: T.bgCard, border: `1px solid ${T.accent}`, borderRadius: 4,
+                                    color: T.accent, fontSize: 10, padding: "2px 6px", width: 70, outline: "none",
+                                    fontFamily: "'Share Tech Mono', monospace",
+                                  }}
+                                />
+                                <button
+                                  onClick={() => { setSplitFormats((p) => { const n = { ...p }; delete n[key]; return n; }); setSplitEditingField(null); }}
+                                  style={{ background: "none", border: "none", color: T.error, cursor: "pointer", fontSize: 11, padding: 0 }}
+                                >✕</button>
+                              </div>
+                            ) : (
+                              <span
+                                onClick={() => { setSplitEditingField(key); setSplitInputValue(splitFormats[key] || ""); }}
+                                title="Cliquer pour définir un groupement visuel (ex: 4 4 1)"
+                                style={{ color: splitFormats[key] ? T.success : T.accent, cursor: "pointer", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}
+                              >
+                                {label}
+                                {splitFormats[key] && <span style={{ fontSize: 9, color: `${T.success}88`, fontFamily: "monospace" }}>[{splitFormats[key]}]</span>}
+                                <span style={{ fontSize: 9, opacity: 0.4 }}>✎</span>
+                              </span>
+                            )}
                           </th>
                         ))}
                       </tr>
@@ -1023,11 +1098,15 @@ function ImportPage() {
                     <tbody>
                       {editableRows.slice(0, 5).map((row, ri) => (
                         <tr key={ri} style={{ borderBottom: `1px solid ${T.border}22` }}>
-                          {visibleCols.slice(0, 5).map(({ h }) => (
-                            <td key={h} style={{ color: T.textMuted, padding: "4px 6px", fontFamily: "monospace" }}>
-                              {applyGrouping(row[h] ?? "", splitFormats[h] || "") || "—"}
-                            </td>
-                          ))}
+                          <td style={{ color: T.textMuted, padding: "4px 6px", fontFamily: "monospace" }}>
+                            {mapping.rang ? applyGrouping(row[mapping.rang] ?? "", splitFormats["rang"] || "") || "—" : "—"}
+                          </td>
+                          <td style={{ color: T.text, padding: "4px 6px", fontFamily: "monospace", fontSize: 11 }}>
+                            {mapping.reference ? applyGrouping(String(row[mapping.reference] ?? "").slice(0, 28), splitFormats["reference"] || "") || "—" : "—"}
+                          </td>
+                          <td style={{ color: T.warning, padding: "4px 6px", fontFamily: "monospace" }}>
+                            {mapping.poids ? applyGrouping((parseFloat(row[mapping.poids] ?? "") || 0).toFixed(2) + "t", splitFormats["poids"] || "") : "—"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1059,6 +1138,9 @@ function ImportPage() {
                   ["Colonnes visibles", String(visibleCount)],
                   ["Lignes totales", String(totalRows)],
                   ["Onglets", String(sheetNames.length)],
+                  ["📍 Colonne Rang", mapping.rang || "— non mappé"],
+                  ["🏷 Colonne Référence", mapping.reference || "— non mappé"],
+                  ["⚖️ Colonne Poids", mapping.poids || "— non mappé"],
                 ] as [string, string][]).map(([k, v]) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border2}33` }}>
                     <span style={{ color: T.textMuted, fontSize: 13 }}>{k}</span>
