@@ -1260,7 +1260,16 @@ function ImportPage() {
                         {idx === 0 && <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>+ Colonne supplémentaire</div>}
                         <select
                           value={ex.col}
-                          onChange={(e) => setExtras((exs) => exs.map((x, i) => i === idx ? { ...x, col: e.target.value } : x))}
+                          onChange={(e) => {
+                            const newCol = e.target.value;
+                            setExtras((exs) => exs.map((x, i) => {
+                              if (i !== idx) return x;
+                              // Auto-remplir le label si vide, "EXTRA", ou si label == ancienne colonne
+                              const isDefault = !x.label.trim() || x.label === "EXTRA" || x.label === x.col;
+                              const autoLabel = (isDefault && newCol) ? newCol : x.label;
+                              return { ...x, col: newCol, label: autoLabel };
+                            }));
+                          }}
                           style={{
                             width: "100%", background: T.bgCard,
                             border: `1px solid ${ex.col ? T.success : T.border2}`,
@@ -1385,7 +1394,7 @@ function ImportPage() {
                           <td style={{ color: T.warning, padding: "4px 6px", fontFamily: "monospace" }}>
                             {mapping.poids ? (() => {
                               const raw = parseFloat(row[mapping.poids] ?? "") || 0;
-                              const val = poidsUnit === "kg" ? (raw * 1000).toFixed(0) : raw.toFixed(3);
+                              const val = poidsUnit === "kg" ? (raw * 1000).toFixed(0) : parseFloat(raw.toFixed(3)).toString();
                               return applyGrouping(val + (poidsUnit === "kg" ? "kg" : "t"), splitFormats["poids"] || "");
                             })() : "—"}
                           </td>
@@ -1507,7 +1516,7 @@ function TablePage() {
     editingHeader, setEditingHeader,
     dimRepeated, setDimRepeated,
     allRows, repetitiveByCol, addedRows,
-    showToast, setActiveTab,
+    setActiveTab,
     splitFormats,
     mapping, extras,
     pointedRows, setPointedRows,
@@ -1545,22 +1554,6 @@ function TablePage() {
       next.has(idx) ? next.delete(idx) : next.add(idx);
       return next;
     });
-  };
-
-  const applyColAction = () => {
-    if (selectMode !== "col") return;
-    setHiddenCols((prev) => new Set([...prev, ...selectedItems]));
-    setSelectedItems(new Set());
-    setSelectMode("none");
-    showToast(`${selectedItems.size} colonne(s) masquée(s)`, "info");
-  };
-
-  const applyRowDeletion = () => {
-    if (selectMode !== "row") return;
-    setHiddenRows((prev) => new Set([...prev, ...selectedItems]));
-    setSelectedItems(new Set());
-    setSelectMode("none");
-    showToast(`${selectedItems.size} ligne(s) masquée(s)`, "info");
   };
 
   const visibleColCount = headers.filter((_, i) => !hiddenCols.has(i)).length;
@@ -1850,14 +1843,6 @@ function TablePage() {
               className={`ste-btn${selectMode === "row" ? " active" : ""}`}
               onClick={() => { setSelectMode(selectMode === "row" ? "none" : "row"); setSelectedItems(new Set()); }}
             >{selectMode === "row" ? "✓ " : ""}Lig.</button>
-            {selectedItems.size > 0 && (
-              <button className="ste-btn danger" onClick={selectMode === "col" ? applyColAction : applyRowDeletion}>
-                {selectMode === "col" ? `Masquer ${selectedItems.size} col.` : `Masquer ${selectedItems.size} lig.`}
-              </button>
-            )}
-            {(hiddenCols.size > 0 || hiddenRows.size > 0) && (
-              <button className="ste-btn" onClick={() => { setHiddenCols(new Set()); setHiddenRows(new Set()); }}>↺</button>
-            )}
             {sortCol !== null && (
               <button className="ste-btn" onClick={() => { setSortCol(null); setPageIdx(0); }}>✕ Tri</button>
             )}
@@ -1991,7 +1976,7 @@ function TablePage() {
                       display = null;
                     } else if (ci === poidsColIdx) {
                       const raw = parseFloat(strVal) || 0;
-                      const val = poidsUnit === "kg" ? (raw * 1000).toFixed(0) : raw.toFixed(3);
+                      const val = poidsUnit === "kg" ? (raw * 1000).toFixed(0) : parseFloat(raw.toFixed(3)).toString();
                       display = applyGrouping(val + (poidsUnit === "kg" ? " kg" : " t"), fmt);
                     } else if (ci === refColIdx && autoRefFmt) {
                       display = autoFormatRef(strVal, fmt);
