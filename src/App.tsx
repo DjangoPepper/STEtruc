@@ -830,7 +830,7 @@ function ImportPage() {
                       }}
                     >{name}</button>
                   ))}
-                </div>
+                </div>}
               </div>
             )}
 
