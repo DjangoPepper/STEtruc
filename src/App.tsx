@@ -439,34 +439,27 @@ function Btn({
 
 // Stats Bar compacte
 function StatsBar() {
-  const { parsed, addedRows, hiddenCols, hiddenRows, hiddenSheets, sheetNames, headers } = useApp();
+  const { parsed, addedRows, hiddenCols, hiddenRows, headers } = useApp();
   if (!parsed) return null;
   const visibleCols = headers.filter((_, i) => !hiddenCols.has(i)).length;
   const allRows = [...addedRows, ...parsed.rows];
   const visibleRows = allRows.filter((_, i) => !hiddenRows.has(i)).length;
-  const visibleShts = sheetNames.filter((n) => !hiddenSheets.has(n)).length;
 
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
+      display: "flex", alignItems: "center", gap: 0,
       background: T.bgDark, borderBottom: `1px solid ${T.border}`,
+      padding: "3px 12px",
     }}>
       {[
-        { label: "Colonnes", value: visibleCols, color: T.accent },
-        { label: "Lignes",   value: visibleRows, color: T.success },
-        { label: "Onglets",  value: visibleShts, color: T.warning },
-      ].map((s) => (
-        <div key={s.label} style={{
-          padding: "8px 4px", textAlign: "center",
-          borderRight: `1px solid ${T.border}`,
-        }}>
-          <div style={{ color: s.color, fontSize: 17, fontWeight: 900, fontFamily: "monospace" }}>
-            {s.value}
-          </div>
-          <div style={{ color: T.textDim, fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
-            {s.label}
-          </div>
-        </div>
+        { label: "COL", value: visibleCols, color: T.accent },
+        { label: "LIG", value: visibleRows, color: T.success },
+      ].map((s, i) => (
+        <span key={s.label} style={{ fontSize: 10, color: T.textDim, display: "flex", alignItems: "center", gap: 3 }}>
+          {i > 0 && <span style={{ color: T.border2, margin: "0 6px" }}>·</span>}
+          <span style={{ color: s.color, fontWeight: 900 }}>{s.value}</span>
+          <span style={{ letterSpacing: "0.06em" }}> {s.label}</span>
+        </span>
       ))}
     </div>
   );
@@ -1303,66 +1296,6 @@ function ImportPage() {
 // ─────────────────────────────────────────────
 
 // Barre de navigation rapide entre onglets (usage dans TablePage)
-function SheetSwitcher() {
-  const {
-    sheetNames, hiddenSheets, activeSheet, setActiveSheet,
-    workbook, loadSheet,
-  } = useApp();
-
-  const visibleSheets = sheetNames.filter((n) => !hiddenSheets.has(n));
-  if (visibleSheets.length <= 1) return null;
-
-  return (
-    <div style={{
-      display: "flex", overflowX: "auto", gap: 4,
-      padding: "8px 12px",
-      background: T.bgDark,
-      borderBottom: `1px solid ${T.border}`,
-    }}>
-      {visibleSheets.map((name) => {
-        const isActive = activeSheet === name;
-        return (
-          <button
-            key={name}
-            onClick={() => {
-              if (!isActive && workbook) {
-                setActiveSheet(name);
-                loadSheet(workbook, name);
-              }
-            }}
-            style={{
-              flexShrink: 0,
-              background: isActive ? T.border : T.bgCard,
-              border: `1px solid ${isActive ? T.accent : T.border2}`,
-              borderRadius: 7, padding: "5px 12px",
-              cursor: isActive ? "default" : "pointer",
-              color: isActive ? T.accent : T.textMuted,
-              fontSize: 11, fontWeight: 700,
-              fontFamily: "'Share Tech Mono', monospace",
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              if (!isActive) (e.currentTarget as HTMLButtonElement).style.borderColor = T.accent;
-            }}
-            onMouseLeave={(e) => {
-              if (!isActive) (e.currentTarget as HTMLButtonElement).style.borderColor = T.border2;
-            }}
-          >
-            {name}
-          </button>
-        );
-      })}
-      <span style={{
-        marginLeft: "auto", flexShrink: 0,
-        color: T.textDim, fontSize: 10, alignSelf: "center",
-        letterSpacing: "0.05em",
-      }}>
-        {visibleSheets.indexOf(activeSheet ?? "") + 1}/{visibleSheets.length}
-      </span>
-    </div>
-  );
-}
-
 function TablePage() {
   const {
     parsed, headers, setHeaders,
@@ -1370,7 +1303,7 @@ function TablePage() {
     selectMode, setSelectMode, selectedItems, setSelectedItems,
     editingHeader, setEditingHeader,
     dimRepeated, setDimRepeated,
-    fileName, sheetNames,
+    fileName,
     allRows, repetitiveByCol, addedRows,
     showToast, setActiveTab,
   } = useApp();
@@ -1382,6 +1315,7 @@ function TablePage() {
   const [pageIdx,     setPageIdx]     = useState(0);
   const [pageSize,    setPageSize]    = useState(20);
   const [modalRow,    setModalRow]    = useState<{ row: CellValue[]; rowNum: number } | null>(null);
+  const [openToolbar, setOpenToolbar] = useState(true);
 
   if (!parsed) {
     return (
@@ -1582,40 +1516,52 @@ function TablePage() {
       <style>{css}</style>
       <PageHeader title="Pointage" subtitle={fileName ? `📄 ${fileName}` : undefined} />
       <StatsBar />
-      {sheetNames.length > 1 && <SheetSwitcher />}
 
       {/* Toolbar */}
-      <div style={{
-        padding: "10px 12px", background: T.bgDark, borderBottom: `1px solid ${T.border}`,
-        display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center",
-      }}>
-        <div className={`dim-chip${dimRepeated ? " on" : ""}`} onClick={() => setDimRepeated((v) => !v)}>
-          <span className="dim-dot" />Répétitions
+      <div>
+        <div
+          style={{
+            padding: "5px 12px", background: T.bgDark, borderBottom: `1px solid ${T.border}`,
+            display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer",
+          }}
+          onClick={() => setOpenToolbar((o) => !o)}
+        >
+          <span style={{ fontSize: 10, color: T.textDim, letterSpacing: "0.08em", textTransform: "uppercase" }}>Outils</span>
+          <span style={{ fontSize: 10, color: T.textDim, opacity: 0.6 }}>{openToolbar ? "▲" : "▼"}</span>
         </div>
-        <button className="ste-btn" onClick={() => setShowAddRow(true)}>+ Ligne</button>
-        <button
-          className={`ste-btn${selectMode === "col" ? " active" : ""}`}
-          onClick={() => { setSelectMode(selectMode === "col" ? "none" : "col"); setSelectedItems(new Set()); }}
-        >{selectMode === "col" ? "✓ " : ""}Colonnes</button>
-        <button
-          className={`ste-btn${selectMode === "row" ? " active" : ""}`}
-          onClick={() => { setSelectMode(selectMode === "row" ? "none" : "row"); setSelectedItems(new Set()); }}
-        >{selectMode === "row" ? "✓ " : ""}Lignes</button>
-        {selectedItems.size > 0 && (
-          <button className="ste-btn danger" onClick={selectMode === "col" ? applyColAction : applyRowDeletion}>
-            {selectMode === "col" ? `Masquer ${selectedItems.size} col.` : `Masquer ${selectedItems.size} ligne(s)`}
-          </button>
-        )}
-        {(hiddenCols.size > 0 || hiddenRows.size > 0) && (
-          <button className="ste-btn" onClick={() => { setHiddenCols(new Set()); setHiddenRows(new Set()); }}>
-            Restaurer tout
-          </button>
-        )}
-        {sortCol !== null && (
-          <button className="ste-btn" onClick={() => { setSortCol(null); setPageIdx(0); }}>✕ Tri</button>
-        )}
-        {Object.values(colFilters).some((v) => v.trim()) && (
-          <button className="ste-btn" onClick={() => { setColFilters({}); setPageIdx(0); }}>✕ Filtres</button>
+        {openToolbar && (
+          <div style={{
+            padding: "8px 12px", background: T.bgDark, borderBottom: `1px solid ${T.border}`,
+            display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center",
+          }}>
+            <div className={`dim-chip${dimRepeated ? " on" : ""}`} onClick={() => setDimRepeated((v) => !v)}>
+              <span className="dim-dot" />Répétitions
+            </div>
+            <button
+              className={`ste-btn${selectMode === "col" ? " active" : ""}`}
+              onClick={() => { setSelectMode(selectMode === "col" ? "none" : "col"); setSelectedItems(new Set()); }}
+            >{selectMode === "col" ? "✓ " : ""}Colonnes</button>
+            <button
+              className={`ste-btn${selectMode === "row" ? " active" : ""}`}
+              onClick={() => { setSelectMode(selectMode === "row" ? "none" : "row"); setSelectedItems(new Set()); }}
+            >{selectMode === "row" ? "✓ " : ""}Lignes</button>
+            {selectedItems.size > 0 && (
+              <button className="ste-btn danger" onClick={selectMode === "col" ? applyColAction : applyRowDeletion}>
+                {selectMode === "col" ? `Masquer ${selectedItems.size} col.` : `Masquer ${selectedItems.size} ligne(s)`}
+              </button>
+            )}
+            {(hiddenCols.size > 0 || hiddenRows.size > 0) && (
+              <button className="ste-btn" onClick={() => { setHiddenCols(new Set()); setHiddenRows(new Set()); }}>
+                Restaurer tout
+              </button>
+            )}
+            {sortCol !== null && (
+              <button className="ste-btn" onClick={() => { setSortCol(null); setPageIdx(0); }}>✕ Tri</button>
+            )}
+            {Object.values(colFilters).some((v) => v.trim()) && (
+              <button className="ste-btn" onClick={() => { setColFilters({}); setPageIdx(0); }}>✕ Filtres</button>
+            )}
+          </div>
         )}
       </div>
 
