@@ -608,8 +608,8 @@ function applyGrouping(value: string, pattern: string): string {
 
 function ImportPage() {
   const {
-    handleFile, parsed, setParsed, fileName,
-    sheetNames, activeSheet, setActiveSheet, workbook, loadSheet,
+    handleFile, parsed, setParsed, fileName, setFileName,
+    sheetNames, setSheetNames, activeSheet, setActiveSheet, workbook, setWorkbook, loadSheet,
     showToast, setActiveTab,
     headers, setHeaders,
     hiddenCols, setHiddenCols,
@@ -617,6 +617,15 @@ function ImportPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  const handleChangeFile = () => {
+    setParsed(null);
+    setFileName(null);
+    setWorkbook(null);
+    setSheetNames([]);
+    setActiveSheet(null);
+    setStep(1);
+  };
   const [editableRows, setEditableRows] = useState<Record<string, string>[]>([]);
   const [editingHdr, setEditingHdr] = useState<number | null>(null);
   // split formats: { [headerName]: "4 4 1" } for visual grouping in preview
@@ -804,6 +813,12 @@ function ImportPage() {
         {/* ── STEP 2 : Columns editor + data preview ── */}
         {step === 2 && parsed && (
           <div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+              <button
+                onClick={handleChangeFile}
+                style={{ background: "none", border: `1px solid ${T.border2}`, borderRadius: 8, color: T.textMuted, fontSize: 11, cursor: "pointer", padding: "4px 10px", fontFamily: "inherit" }}
+              >📂 Changer de fichier</button>
+            </div>
             {/* Sheet selector */}
             {sheetNames.length > 1 && (
               <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, padding: 14, border: `1px solid ${T.accentDim}` }}>
@@ -1208,6 +1223,12 @@ function ImportPage() {
                   onClick={() => { showToast("✅ Fichier prêt", "success"); setActiveTab("tableau"); }}
                   color={T.success} textColor="#0F172A" fullWidth
                 >📊 Voir le tableau →</Btn>
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
+                <button
+                  onClick={handleChangeFile}
+                  style={{ background: "none", border: "none", color: T.textDim, fontSize: 11, cursor: "pointer", textDecoration: "underline", fontFamily: "inherit" }}
+                >📂 Changer de fichier</button>
               </div>
             </div>
           );
