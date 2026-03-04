@@ -1131,7 +1131,21 @@ function ImportPage() {
 
             {/* ── Column mapping selectors ── */}
             {visibleCols.length > 0 && (
-              <div style={{ marginBottom: 14 }}>
+              <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
+                {/* Header bar */}
+                <div style={{ padding: "8px 14px", background: T.bgDark, borderBottom: `1px solid ${T.border2}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>🗂 Mapping colonnes</span>
+                  <button
+                    onClick={() => setExtras((exs) => [...exs, { col: "", label: "EXTRA" }])}
+                    style={{
+                      background: `${T.success}22`, border: `1px solid ${T.success}55`,
+                      borderRadius: 7, color: T.success, fontSize: 11, fontWeight: 700,
+                      cursor: "pointer", padding: "4px 12px",
+                      fontFamily: "'Share Tech Mono', monospace",
+                    }}
+                  >+ Colonne</button>
+                </div>
+                <div style={{ padding: "10px 14px" }}>
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   {([
                     { field: "rang"      as const, label: "📍 Rang" },
@@ -1203,16 +1217,7 @@ function ImportPage() {
                       >🗑</button>
                     </div>
                   ))}
-                  <button
-                    onClick={() => setExtras((exs) => [...exs, { col: "", label: "EXTRA" }])}
-                    style={{
-                      alignSelf: "flex-start",
-                      background: `${T.success}22`, border: `1px solid ${T.success}55`,
-                      borderRadius: 7, color: T.success, fontSize: 11, fontWeight: 700,
-                      cursor: "pointer", padding: "5px 12px",
-                      fontFamily: "'Share Tech Mono', monospace",
-                    }}
-                  >+ Colonne</button>
+                </div>
                 </div>
               </div>
             )}
