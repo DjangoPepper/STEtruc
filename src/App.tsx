@@ -632,14 +632,14 @@ function ImportPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!parsed || headers.length === 0) return;
-    const rows20 = parsed.rows.slice(0, 20).map((row) => {
+    const rows5 = parsed.rows.slice(0, 5).map((row) => {
       const obj: Record<string, string> = {};
       headers.forEach((h, i) => {
         obj[h] = row[i] !== null && row[i] !== undefined ? String(row[i]) : "";
       });
       return obj;
     });
-    setEditableRows(rows20);
+    setEditableRows(rows5);
     setSplitFormats({});
     // Auto-detect column mapping from header names
     setMapping({
