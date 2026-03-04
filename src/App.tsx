@@ -608,8 +608,8 @@ function applyGrouping(value: string, pattern: string): string {
 
 function ImportPage() {
   const {
-    handleFile, parsed, setParsed, fileName, setFileName,
-    sheetNames, setSheetNames, activeSheet, setActiveSheet, workbook, setWorkbook, loadSheet,
+    handleFile, parsed, setParsed, fileName,
+    sheetNames, activeSheet, setActiveSheet, workbook, loadSheet,
     showToast, setActiveTab,
     headers, setHeaders,
     hiddenCols, setHiddenCols,
@@ -617,15 +617,6 @@ function ImportPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
-
-  const handleChangeFile = () => {
-    setParsed(null);
-    setFileName(null);
-    setWorkbook(null);
-    setSheetNames([]);
-    setActiveSheet(null);
-    setStep(1);
-  };
   const [editableRows, setEditableRows] = useState<Record<string, string>[]>([]);
   const [editingHdr, setEditingHdr] = useState<number | null>(null);
   // split formats: { [headerName]: "4 4 1" } for visual grouping in preview
@@ -635,6 +626,9 @@ function ImportPage() {
   const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string }>({
     rang: "", reference: "", poids: "",
   });
+  const [openOnglets,   setOpenOnglets]   = useState(true);
+  const [openAtypiques, setOpenAtypiques] = useState(true);
+  const [openHeaders,   setOpenHeaders]   = useState(true);
 
   // Re-initialize editableRows when the parsed data changes (new file or new sheet).
   // Headers intentionally excluded to avoid re-init when user renames columns.
@@ -813,19 +807,16 @@ function ImportPage() {
         {/* ── STEP 2 : Columns editor + data preview ── */}
         {step === 2 && parsed && (
           <div>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-              <button
-                onClick={handleChangeFile}
-                style={{ background: "none", border: `1px solid ${T.border2}`, borderRadius: 8, color: T.textMuted, fontSize: 11, cursor: "pointer", padding: "4px 10px", fontFamily: "inherit" }}
-              >📂 Changer de fichier</button>
-            </div>
             {/* Sheet selector */}
             {sheetNames.length > 1 && (
               <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, padding: 14, border: `1px solid ${T.accentDim}` }}>
-                <div style={{ color: T.accent, fontWeight: 700, fontSize: 12, marginBottom: 8, textTransform: "uppercase" }}>
-                  🗂 Onglets ({sheetNames.length})
+                <div
+                  onClick={() => setOpenOnglets((o) => !o)}
+                  style={{ color: T.accent, fontWeight: 700, fontSize: 12, marginBottom: openOnglets ? 8 : 0, textTransform: "uppercase", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>🗂 Onglets ({sheetNames.length})</span>
+                  <span style={{ opacity: 0.5, fontSize: 10 }}>{openOnglets ? "▲" : "▼"}</span>
                 </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {openOnglets && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {sheetNames.map((name) => (
                     <button
                       key={name}
@@ -852,8 +843,11 @@ function ImportPage() {
               return (
                 <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, border: `1px solid ${T.warning}55`, overflow: "hidden" }}>
                   <div style={{ padding: "10px 14px", background: T.bgDark, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                    <span style={{ color: T.warning, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
+                    <span
+                      onClick={() => setOpenAtypiques((o) => !o)}
+                      style={{ color: T.warning, fontWeight: 800, fontSize: 12, textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                       ⚠ Lignes atypiques ({atypical.length})
+                      <span style={{ opacity: 0.5, fontSize: 10 }}>{openAtypiques ? "▲" : "▼"}</span>
                     </span>
                     <button
                       onClick={() => setEditableRows((prev) => prev.filter((row) => !anomalyInfo.isAnomalous(row)))}
@@ -864,7 +858,7 @@ function ImportPage() {
                       }}
                     >✕ Supprimer tout</button>
                   </div>
-                  <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                  {openAtypiques && <div style={{ maxHeight: 220, overflowY: "auto" }}>
                     {atypical.map(({ row, ri }) => (
                       <div key={ri} style={{
                         display: "flex", alignItems: "center", gap: 8,
@@ -892,7 +886,7 @@ function ImportPage() {
                         >✕</button>
                       </div>
                     ))}
-                  </div>
+                  </div>}
                 </div>
               );
             })()}
@@ -903,8 +897,11 @@ function ImportPage() {
                 padding: "10px 14px", background: T.bgDark,
                 display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
               }}>
-                <span style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
+                <span
+                  onClick={() => setOpenHeaders((o) => !o)}
+                  style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                   📋 Headers · {visibleCols.length}/{headers.length} colonnes
+                  <span style={{ opacity: 0.5, fontSize: 10 }}>{openHeaders ? "▲" : "▼"}</span>
                 </span>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                   <span style={{ color: T.textDim, fontSize: 10 }}>{parsed.rows.length} lignes</span>
@@ -929,7 +926,7 @@ function ImportPage() {
                   )}
                 </div>
               </div>
-              <div style={{ padding: "10px 14px", display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {openHeaders && <div style={{ padding: "10px 14px", display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {headers.map((h, i) => {
                   if (hiddenCols.has(i)) return null;
                   return (
@@ -975,7 +972,7 @@ function ImportPage() {
                     </span>
                   );
                 })}
-              </div>
+              </div>}
             </div>
 
             {/* Editable data preview */}
@@ -1085,29 +1082,33 @@ function ImportPage() {
             )}
 
             {/* ── Column mapping selectors ── */}
-            {visibleCols.length > 0 && ([
-              { field: "rang"      as const, label: "📍 Colonne Rang" },
-              { field: "reference" as const, label: "🏷 Colonne Référence *" },
-              { field: "poids"     as const, label: "⚖️ Colonne Poids (tonnes)" },
-            ].map(({ field, label }) => (
-              <div key={field} style={{ marginBottom: 10 }}>
-                <div style={{ color: T.textMuted, fontSize: 12, marginBottom: 4, fontWeight: 600 }}>{label}</div>
-                <select
-                  value={mapping[field]}
-                  onChange={(e) => setMapping((m) => ({ ...m, [field]: e.target.value }))}
-                  style={{
-                    width: "100%", background: T.bgCard,
-                    border: `1px solid ${mapping[field] ? T.accent : T.border2}`,
-                    borderRadius: 8, color: T.text, fontSize: 14, padding: "10px 12px",
-                    outline: "none", fontFamily: "'Share Tech Mono', monospace",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <option value="">— Ignorer —</option>
-                  {visibleCols.map(({ h }) => <option key={h} value={h}>{h}</option>)}
-                </select>
+            {visibleCols.length > 0 && (
+              <div style={{ marginBottom: 14, display: "flex", gap: 8 }}>
+                {([
+                  { field: "rang"      as const, label: "📍 Rang" },
+                  { field: "reference" as const, label: "🏷 Référence *" },
+                  { field: "poids"     as const, label: "⚖️ Poids (t)" },
+                ] as { field: keyof typeof mapping; label: string }[]).map(({ field, label }) => (
+                  <div key={field} style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: T.textMuted, fontSize: 11, marginBottom: 4, fontWeight: 600 }}>{label}</div>
+                    <select
+                      value={mapping[field]}
+                      onChange={(e) => setMapping((m) => ({ ...m, [field]: e.target.value }))}
+                      style={{
+                        width: "100%", background: T.bgCard,
+                        border: `1px solid ${mapping[field] ? T.accent : T.border2}`,
+                        borderRadius: 8, color: T.text, fontSize: 12, padding: "7px 6px",
+                        outline: "none", fontFamily: "'Share Tech Mono', monospace",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="">— — —</option>
+                      {visibleCols.map(({ h }) => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </div>
+                ))}
               </div>
-            )))}
+            )}
 
             {/* ── Preview : 5 first rows (mapped columns) ── */}
             {editableRows.length > 0 && (
@@ -1223,12 +1224,6 @@ function ImportPage() {
                   onClick={() => { showToast("✅ Fichier prêt", "success"); setActiveTab("tableau"); }}
                   color={T.success} textColor="#0F172A" fullWidth
                 >📊 Voir le tableau →</Btn>
-              </div>
-              <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
-                <button
-                  onClick={handleChangeFile}
-                  style={{ background: "none", border: "none", color: T.textDim, fontSize: 11, cursor: "pointer", textDecoration: "underline", fontFamily: "inherit" }}
-                >📂 Changer de fichier</button>
               </div>
             </div>
           );
