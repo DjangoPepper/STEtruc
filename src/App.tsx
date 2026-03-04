@@ -813,8 +813,7 @@ function ImportPage() {
                 <div
                   onClick={() => setOpenOnglets((o) => !o)}
                   style={{ color: T.accent, fontWeight: 700, fontSize: 12, marginBottom: openOnglets ? 8 : 0, textTransform: "uppercase", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>🗂 Onglets ({sheetNames.length})</span>
-                  <span style={{ opacity: 0.5, fontSize: 10 }}>{openOnglets ? "▲" : "▼"}</span>
+                  <span>🗂 Onglets ({sheetNames.length}) <span style={{ opacity: 0.5, fontSize: 10 }}>{openOnglets ? "▲" : "▼"}</span></span>
                 </div>
                 {openOnglets && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {sheetNames.map((name) => (
