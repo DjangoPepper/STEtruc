@@ -676,9 +676,12 @@ function ImportPage() {
   const [splitEditingField, setSplitEditingField] = useState<string | null>(null);
   const [splitInputValue, setSplitInputValue] = useState("");
   const [poidsUnit,   setPoidsUnit]   = useState<"t" | "kg">("t");
-  const [openOnglets,   setOpenOnglets]   = useState(true);
-  const [openAtypiques, setOpenAtypiques] = useState(true);
-  const [openHeaders,   setOpenHeaders]   = useState(true);
+  const [openOnglets,   setOpenOnglets]   = useState(false);
+  const [openAtypiques, setOpenAtypiques] = useState(false);
+  const [openHeaders,   setOpenHeaders]   = useState(false);
+  const [openDonnees,   setOpenDonnees]   = useState(false);
+  const [openMapping,   setOpenMapping]   = useState(false);
+  const [openApercu,    setOpenApercu]    = useState(false);
 
   // Re-initialize editableRows when the parsed data changes (new file or new sheet).
   // Headers intentionally excluded to avoid re-init when user renames columns.
@@ -703,6 +706,12 @@ function ImportPage() {
     const autoExtra = headers.find((k) => /prepa|zone|prep/i.test(k)) ?? "";
     setExtras([{ col: autoExtra, label: "PREPA" }]);
     setStep((s) => (s === 1 ? 2 : s));
+    setOpenOnglets(false);
+    setOpenAtypiques(false);
+    setOpenHeaders(false);
+    setOpenDonnees(false);
+    setOpenMapping(false);
+    setOpenApercu(false);
   }, [parsed, activeSheet]); // intentionally excludes `headers`
 
   const onFile = useCallback((file: File) => { handleFile(file); }, [handleFile]);
@@ -937,7 +946,14 @@ function ImportPage() {
               const atypical = editableRows
                 .map((row, ri) => ({ row, ri }))
                 .filter(({ row }) => anomalyInfo.isAnomalous(row));
-              if (atypical.length === 0) return null;
+              if (atypical.length === 0) return (
+                <div style={{ marginBottom: 14, background: "#111A14", borderRadius: 12, border: `1px solid ${T.success}44`, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 14px", background: "#0B1410", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: T.success, fontSize: 14 }}>✅</span>
+                    <span style={{ color: T.success, fontWeight: 700, fontSize: 12, textTransform: "uppercase" }}>Aucune ligne atypique détectée</span>
+                  </div>
+                </div>
+              );
               return (
                 <div style={{ marginBottom: 14, background: "#1E1433", borderRadius: 12, border: `1px solid ${T.warning}55`, overflow: "hidden" }}>
                   <div style={{ padding: "10px 14px", background: "#140D24", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
@@ -1080,13 +1096,17 @@ function ImportPage() {
             {/* Editable data preview */}
             {editableRows.length > 0 && (
               <div style={{ marginBottom: 14, background: T.bgDark, borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
-                <div style={{ padding: "10px 14px", background: T.bgCard, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: T.accent, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
+                <div
+                  onClick={() => setOpenDonnees((o) => !o)}
+                  style={{ padding: "10px 14px", background: T.bgCard, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                >
+                  <span style={{ color: T.accent, fontWeight: 800, fontSize: 12, textTransform: "uppercase", flex: 1 }}>
                     ✏️ Données — {editableRows.length} lignes prévisualisées
                   </span>
                   <span style={{ color: T.textDim, fontSize: 10 }}>Modifiables avant import</span>
+                  <span style={{ color: T.textDim, fontSize: 10, opacity: 0.6, marginLeft: 4 }}>{openDonnees ? "▲" : "▼"}</span>
                 </div>
-                <div style={{ overflowX: "auto", maxHeight: 260, overflowY: "auto" }}>
+                {openDonnees && <div style={{ overflowX: "auto", maxHeight: 260, overflowY: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                     <thead>
                       <tr style={{ position: "sticky", top: 0, background: T.bgDark, zIndex: 1 }}>
@@ -1179,18 +1199,19 @@ function ImportPage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </div>}
               </div>
             )}
-
-            {/* ── Column mapping selectors ── */}
             {visibleCols.length > 0 && (
               <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
                 {/* Header bar */}
-                <div style={{ padding: "8px 14px", background: T.bgDark, borderBottom: `1px solid ${T.border2}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>🗂 Mapping colonnes</span>
+                <div
+                  onClick={() => setOpenMapping((o) => !o)}
+                  style={{ padding: "8px 14px", background: T.bgDark, borderBottom: openMapping ? `1px solid ${T.border2}` : "none", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                >
+                  <span style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase", flex: 1 }}>🗂 Mapping colonnes</span>
                   <button
-                    onClick={() => setExtras((exs) => [...exs, { col: "", label: "EXTRA" }])}
+                    onClick={(e) => { e.stopPropagation(); setExtras((exs) => [...exs, { col: "", label: "EXTRA" }]); }}
                     style={{
                       background: `${T.success}22`, border: `1px solid ${T.success}55`,
                       borderRadius: 7, color: T.success, fontSize: 11, fontWeight: 700,
@@ -1198,8 +1219,9 @@ function ImportPage() {
                       fontFamily: "'Share Tech Mono', monospace",
                     }}
                   >+ Colonne</button>
+                  <span style={{ color: T.textDim, fontSize: 10, opacity: 0.6, marginLeft: 4 }}>{openMapping ? "▲" : "▼"}</span>
                 </div>
-                <div style={{ padding: "10px 14px" }}>
+                {openMapping && <div style={{ padding: "10px 14px" }}>
                 <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                   {([
                     { field: "rang"      as const, label: "📍 Rang" },
@@ -1272,19 +1294,20 @@ function ImportPage() {
                     </div>
                   ))}
                 </div>
-                </div>
+                </div>}
               </div>
             )}
-
-            {/* ── Preview : 5 first rows (mapped columns) ── */}
             {editableRows.length > 0 && (
               <div style={{ background: "#0C2D3A", borderRadius: 10, marginBottom: 14, overflow: "hidden", border: `1px solid #1A5F7A55` }}>
-                <div style={{ padding: "8px 12px", background: "#103848", borderBottom: `1px solid #1A5F7A55`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ color: T.textDim, fontSize: 11, textTransform: "uppercase", fontWeight: 700 }}>Aperçu — 5 premières lignes</span>
+                <div
+                  onClick={() => setOpenApercu((o) => !o)}
+                  style={{ padding: "8px 12px", background: "#103848", borderBottom: openApercu ? `1px solid #1A5F7A55` : "none", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                >
+                  <span style={{ color: T.textDim, fontSize: 11, textTransform: "uppercase", fontWeight: 700, flex: 1 }}>Aperçu — 5 premières lignes</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ color: T.textDim, fontSize: 10 }}>Cliquer sur un header pour grouper</span>
                     <button
-                      onClick={() => setPoidsUnit((u) => u === "t" ? "kg" : "t")}
+                      onClick={(e) => { e.stopPropagation(); setPoidsUnit((u) => u === "t" ? "kg" : "t"); }}
                       style={{
                         background: poidsUnit === "kg" ? `${T.warning}33` : T.bgDark,
                         border: `1px solid ${T.warning}66`, borderRadius: 6,
@@ -1294,8 +1317,9 @@ function ImportPage() {
                       title="Basculer tonnes / kilos"
                     >{poidsUnit === "t" ? "⚖️ t ⇄ kg" : "⚖️ kg ⇄ t"}</button>
                   </div>
+                  <span style={{ color: T.textDim, fontSize: 10, opacity: 0.6, marginLeft: 4 }}>{openApercu ? "▲" : "▼"}</span>
                 </div>
-                <div style={{ padding: 10, overflowX: "auto" }}>
+                {openApercu && <div style={{ padding: 10, overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                     <thead>
                       <tr>
@@ -1369,7 +1393,7 @@ function ImportPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </div>}
               </div>
             )}
 
