@@ -86,6 +86,10 @@ interface AppState {
   // split/grouping formats keyed by header name
   splitFormats: Record<string, string>;
   setSplitFormats: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  autoRefFmt: boolean;
+  setAutoRefFmt: React.Dispatch<React.SetStateAction<boolean>>;
+  poidsUnit: "t" | "kg";
+  setPoidsUnit: React.Dispatch<React.SetStateAction<"t" | "kg">>;
   // mapping (colonnes REF/Rang/Poids) + extras
   mapping: { rang: string; reference: string; poids: string };
   setMapping: React.Dispatch<React.SetStateAction<{ rang: string; reference: string; poids: string }>>;
@@ -180,6 +184,8 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   const [dimRepeated, setDimRepeated] = useState(true);
   const [exportFileName, setExportFileName] = useState("données_nettoyées");
   const [splitFormats, setSplitFormats] = useState<Record<string, string>>({});
+  const [autoRefFmt, setAutoRefFmt] = useState(false);
+  const [poidsUnit, setPoidsUnit] = useState<"t" | "kg">("t");
   const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string }>({ rang: "", reference: "", poids: "" });
   const [extras, setExtras] = useState<{ col: string; label: string }[]>([{ col: "", label: "PREPA" }]);
   const [pointedRows, setPointedRows] = useState<Set<number>>(new Set());
@@ -302,6 +308,8 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       dimRepeated, setDimRepeated,
       exportFileName, setExportFileName,
       splitFormats, setSplitFormats,
+      autoRefFmt, setAutoRefFmt,
+      poidsUnit, setPoidsUnit,
       mapping, setMapping,
       extras, setExtras,
       pointedRows, setPointedRows,
@@ -655,6 +663,26 @@ function applyGrouping(value: string, pattern: string): string {
   return result;
 }
 
+// Helper: auto-format reference (groupement intelligent selon longueur/contenu)
+function autoFormatRef(val: string, globalFmt: string): string {
+  const str = val.trim();
+  if (!str) return str;
+  if (/^\d+$/.test(str)) {
+    if (str.length === 8) return applyGrouping(str, "3 2 3");
+    if (str.length === 7) return applyGrouping(str, "3 2 2");
+    if (str.length === 6) return applyGrouping(str, "3 3");
+    return globalFmt ? applyGrouping(str, globalFmt) : str;
+  }
+  const letters = [...str.matchAll(/[A-Za-z]/g)];
+  if (letters.length === 1) {
+    const idx = letters[0].index!;
+    if (idx > 0 && idx < str.length - 1) {
+      return str.slice(0, idx) + " " + str[idx].toUpperCase() + " " + str.slice(idx + 1);
+    }
+  }
+  return globalFmt ? applyGrouping(str, globalFmt) : str;
+}
+
 function ImportPage() {
   const {
     handleFile, parsed, setParsed, fileName,
@@ -666,6 +694,8 @@ function ImportPage() {
     splitFormats, setSplitFormats,
     mapping, setMapping,
     extras, setExtras,
+    autoRefFmt, setAutoRefFmt,
+    poidsUnit, setPoidsUnit,
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -675,7 +705,6 @@ function ImportPage() {
   // split formats: now from global context
   const [splitEditingField, setSplitEditingField] = useState<string | null>(null);
   const [splitInputValue, setSplitInputValue] = useState("");
-  const [poidsUnit,   setPoidsUnit]   = useState<"t" | "kg">("t");
   const [openOnglets,   setOpenOnglets]   = useState(false);
   const [openAtypiques, setOpenAtypiques] = useState(false);
   const [openHeaders,   setOpenHeaders]   = useState(false);
@@ -799,7 +828,7 @@ function ImportPage() {
     return { isAnomalous };
   }, [editableRows, visibleCols]);
 
-  const STEP_LABELS = ["Fichier", "Colonnes", "Confirm"] as const;
+  const STEP_LABELS = ["Fichier", "Colonnes", "Confirme"] as const;
 
   return (
     <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
@@ -1039,7 +1068,7 @@ function ImportPage() {
                     >↺ Restaurer ({hiddenCols.size})</button>
                   )}
                   <span
-                    onClick={() => setOpenHeaders((o) => !o)}
+                    onClick={() => { setOpenHeaders((o) => !o); setOpenDonnees((o) => !o); }}
                     style={{ opacity: 0.5, fontSize: 10, cursor: "pointer", color: T.textMuted, padding: "0 2px" }}
                   >{openHeaders ? "▲" : "▼"}</span>
                 </div>
@@ -1101,7 +1130,7 @@ function ImportPage() {
                   style={{ padding: "10px 14px", background: T.bgCard, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
                 >
                   <span style={{ color: T.accent, fontWeight: 800, fontSize: 12, textTransform: "uppercase", flex: 1 }}>
-                    ✏️ Données — {editableRows.length} lignes prévisualisées
+                    ✏️ Données — 5 premières lignes ({editableRows.length} total)
                   </span>
                   <span style={{ color: T.textDim, fontSize: 10 }}>Modifiables avant import</span>
                   <span style={{ color: T.textDim, fontSize: 10, opacity: 0.6, marginLeft: 4 }}>{openDonnees ? "▲" : "▼"}</span>
@@ -1115,51 +1144,14 @@ function ImportPage() {
                             color: T.textDim, padding: "5px 6px", textAlign: "left",
                             borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap", fontWeight: 700,
                           }}>
-                            {splitEditingField === h ? (
-                              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                                <input
-                                  autoFocus
-                                  value={splitInputValue}
-                                  onChange={(e) => setSplitInputValue(e.target.value)}
-                                  placeholder="ex: 4 4 1"
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") { setSplitFormats((p) => ({ ...p, [h]: splitInputValue })); setSplitEditingField(null); }
-                                    if (e.key === "Escape") setSplitEditingField(null);
-                                  }}
-                                  onBlur={() => { setSplitFormats((p) => ({ ...p, [h]: splitInputValue })); setSplitEditingField(null); }}
-                                  style={{
-                                    background: T.bgCard, border: `1px solid ${T.accent}`, borderRadius: 4,
-                                    color: T.accent, fontSize: 10, padding: "2px 6px", width: 70, outline: "none",
-                                    fontFamily: "'Share Tech Mono', monospace",
-                                  }}
-                                />
-                                <button
-                                  onClick={() => { setSplitFormats((p) => { const n = { ...p }; delete n[h]; return n; }); setSplitEditingField(null); }}
-                                  style={{ background: "none", border: "none", color: T.error, cursor: "pointer", fontSize: 11, padding: 0 }}
-                                >✕</button>
-                              </div>
-                            ) : (
-                              <span
-                                onClick={() => { setSplitEditingField(h); setSplitInputValue(splitFormats[h] || ""); }}
-                                title="Cliquer pour définir un groupement visuel (ex: 4 4 1)"
-                                style={{
-                                  color: splitFormats[h] ? T.success : T.textDim,
-                                  cursor: "pointer", fontWeight: 700,
-                                  display: "inline-flex", alignItems: "center", gap: 4,
-                                }}
-                              >
-                                {h}
-                                {splitFormats[h] && <span style={{ fontSize: 9, color: `${T.success}88`, fontFamily: "monospace" }}>[{splitFormats[h]}]</span>}
-                                <span style={{ fontSize: 9, opacity: 0.4 }}>✎</span>
-                              </span>
-                            )}
+                            {h}
                           </th>
                         ))}
                         <th style={{ width: 40, borderBottom: `1px solid ${T.border}` }} />
                       </tr>
                     </thead>
                     <tbody>
-                      {editableRows.map((row, ri) => {
+                      {editableRows.slice(0, 5).map((row, ri) => {
                         const anomalous = anomalyInfo.isAnomalous(row);
                         return (
                           <tr key={ri} style={{
@@ -1206,7 +1198,7 @@ function ImportPage() {
               <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
                 {/* Header bar */}
                 <div
-                  onClick={() => setOpenMapping((o) => !o)}
+                  onClick={() => { setOpenMapping((o) => !o); setOpenApercu((o) => !o); }}
                   style={{ padding: "8px 14px", background: T.bgDark, borderBottom: openMapping ? `1px solid ${T.border2}` : "none", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
                 >
                   <span style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase", flex: 1 }}>🗂 Mapping colonnes</span>
@@ -1307,6 +1299,16 @@ function ImportPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ color: T.textDim, fontSize: 10 }}>Cliquer sur un header pour grouper</span>
                     <button
+                      onClick={(e) => { e.stopPropagation(); setAutoRefFmt((v) => !v); }}
+                      style={{
+                        background: autoRefFmt ? `${T.accent}22` : T.bgDark,
+                        border: `1px solid ${autoRefFmt ? T.accent : T.border2}`, borderRadius: 6,
+                        color: autoRefFmt ? T.accent : T.textDim, fontSize: 10, fontWeight: 700,
+                        cursor: "pointer", padding: "2px 7px", fontFamily: "'Share Tech Mono', monospace",
+                      }}
+                      title="Formatage automatique des références (selon longueur/alphanum)"
+                    >🔢 Réf. auto</button>
+                    <button
                       onClick={(e) => { e.stopPropagation(); setPoidsUnit((u) => u === "t" ? "kg" : "t"); }}
                       style={{
                         background: poidsUnit === "kg" ? `${T.warning}33` : T.bgDark,
@@ -1375,7 +1377,10 @@ function ImportPage() {
                             {mapping.rang ? applyGrouping(row[mapping.rang] ?? "", splitFormats["rang"] || "") || "—" : "—"}
                           </td>
                           <td style={{ color: T.text, padding: "4px 6px", fontFamily: "monospace", fontSize: 11 }}>
-                            {mapping.reference ? applyGrouping(String(row[mapping.reference] ?? "").slice(0, 28), splitFormats["reference"] || "") || "—" : "—"}
+                            {mapping.reference ? (() => {
+                              const raw = String(row[mapping.reference] ?? "").slice(0, 28);
+                              return (autoRefFmt ? autoFormatRef(raw, splitFormats["reference"] || "") : applyGrouping(raw, splitFormats["reference"] || "")) || "—";
+                            })() : "—"}
                           </td>
                           <td style={{ color: T.warning, padding: "4px 6px", fontFamily: "monospace" }}>
                             {mapping.poids ? (() => {
@@ -1419,41 +1424,61 @@ function ImportPage() {
                   ["Onglet actif", activeSheet ?? "—"],
                   ["Colonnes visibles", String(visibleCount)],
                   ["Lignes totales", String(totalRows)],
-                  ["Onglets", String(sheetNames.length)],
                   ["📍 Colonne Rang", mapping.rang || "— non mappé"],
                   ["🏷 Colonne Référence", mapping.reference || "— non mappé"],
                   ["⚖️ Colonne Poids", mapping.poids || "— non mappé"],
-                  ...extras.filter((e) => e.col).map((e) => [`🔖 ${e.label || "EXTRA"}`, e.col]),
+                  ["⚖️ Unité poids", poidsUnit === "kg" ? "Kilogrammes (kg)" : "Tonnes (t)"],
+                  ["🔢 Réf. auto-groupée", autoRefFmt ? "Activé" : "Désactivé"],
+                  ...extras.filter((e) => e.label.trim()).map((e) => [`🔖 ${e.label}`, e.col ? e.col : "+ colonne vide"]),
                 ] as [string, string][]).map(([k, v]) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border2}33` }}>
                     <span style={{ color: T.textMuted, fontSize: 13 }}>{k}</span>
                     <span style={{ color: T.text, fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{v}</span>
                   </div>
                 ))}
+                {Object.keys(splitFormats).length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ color: T.textDim, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 6 }}>Groupements par colonne</div>
+                    {Object.entries(splitFormats).map(([col, fmt]) => (
+                      <div key={col} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: `1px solid ${T.border2}22` }}>
+                        <span style={{ color: T.textMuted, fontSize: 12 }}>{col}</span>
+                        <span style={{ color: T.accent, fontWeight: 700, fontSize: 12, fontFamily: "monospace" }}>{fmt}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div style={{ display: "flex", gap: 10 }}>
                 <Btn onClick={() => setStep(2)} color={T.border2} textColor={T.textMuted} fullWidth>← Retour</Btn>
                 <Btn
                   onClick={() => {
+                    if (!parsed) return;
+                    // Reconstruire parsed.rows depuis editableRows (délétions appliquées) + lignes au-delà de 200
+                    const tail = parsed.rows.slice(200);
+                    const currentHeaders = headers;
+                    let newRows: RawData = [
+                      ...editableRows.map((rowObj) =>
+                        currentHeaders.map((h) => {
+                          const v = rowObj[h] ?? "";
+                          return v === "" ? null : v;
+                        })
+                      ),
+                      ...tail,
+                    ];
+                    const newHeaders = [...currentHeaders];
                     // Apply extras: rename existing cols or add new empty cols
-                    if (parsed && extras.some((e) => e.label.trim())) {
-                      const newHeaders = [...headers];
-                      const newRows: RawData = parsed.rows.map((r) => [...r]);
-                      extras.forEach((ex) => {
-                        const label = ex.label.trim() || "EXTRA";
-                        if (ex.col) {
-                          // rename the existing column header
-                          const idx = newHeaders.indexOf(ex.col);
-                          if (idx >= 0) newHeaders[idx] = label;
-                        } else {
-                          // add a new empty column
-                          newHeaders.push(label);
-                          newRows.forEach((r) => r.push(null));
-                        }
-                      });
-                      setHeaders(newHeaders);
-                      setParsed({ ...parsed, headers: newHeaders, rows: newRows });
-                    }
+                    extras.forEach((ex) => {
+                      const label = ex.label.trim() || "EXTRA";
+                      if (ex.col) {
+                        const idx = newHeaders.indexOf(ex.col);
+                        if (idx >= 0) newHeaders[idx] = label;
+                      } else {
+                        newHeaders.push(label);
+                        newRows = newRows.map((r) => [...r, null]);
+                      }
+                    });
+                    setHeaders(newHeaders);
+                    setParsed({ ...parsed, headers: newHeaders, rows: newRows });
                     showToast("✅ Fichier prêt", "success");
                     setActiveTab("tableau");
                   }}
@@ -1487,6 +1512,8 @@ function TablePage() {
     mapping, extras,
     pointedRows, setPointedRows,
     rowOverrides, setRowOverrides,
+    autoRefFmt, setAutoRefFmt,
+    poidsUnit, setPoidsUnit,
   } = useApp();
 
   const [showAddRow,  setShowAddRow]  = useState(false);
@@ -1546,8 +1573,20 @@ function TablePage() {
     .map((_, i) => i)
     .filter((i) => !hiddenCols.has(i) && i !== prepaIdx);
   if (prepaIdx >= 0 && !hiddenCols.has(prepaIdx)) visibleCols.push(prepaIdx);
+
+  // Labels affichés dans les en-têtes : priorité aux noms définis dans l'Import
+  const mappingLabels = new Map<number, string>();
+  if (mapping.rang)      { const i = headers.indexOf(mapping.rang);      if (i >= 0) mappingLabels.set(i, "📍 Rang"); }
+  if (mapping.reference) { const i = headers.indexOf(mapping.reference); if (i >= 0) mappingLabels.set(i, "🏷 Référence"); }
+  if (mapping.poids)     { const i = headers.indexOf(mapping.poids);     if (i >= 0) mappingLabels.set(i, `⚖️ Poids (${poidsUnit})`); }
+  extras.forEach((ex) => {
+    if (ex.col && ex.label.trim()) {
+      const i = headers.indexOf(ex.col);
+      if (i >= 0) mappingLabels.set(i, ex.label.trim());
+    }
+  });
   const colLabel = (i: number): string =>
-    i === destIdx ? "DECHARGEMENT" : headers[i];
+    mappingLabels.get(i) ?? (i === destIdx ? "DECHARGEMENT" : headers[i]);
 
   // ── Filter / sort / paginate ──
   const baseRows = allRows
@@ -1579,27 +1618,101 @@ function TablePage() {
   const safePage   = Math.min(pageIdx, totalPages - 1);
   const pageRows   = sortedRows.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
+  // Indices des colonnes référence et poids
+  const refColIdx   = mapping.reference ? headers.indexOf(mapping.reference)  : -1;
+  const poidsColIdx = mapping.poids     ? headers.indexOf(mapping.poids)      : -1;
+
+  // Largeur des colonnes — compression proportionnelle pour éviter le scroll
+  const colWidths = useMemo(() => {
+    const CH_DATA = 9.5;   // px/char police 18px
+    const CH_HDR  = 8;    // px/char police 14px uppercase
+    const MIN_W   = 38;
+    const MAX_W   = 200;
+    const PAD     = 20;    // padding interne
+    const NUM_W   = 38;    // colonne #
+    const VIEWPORT = 380; // largeur cible mobile
+    const sample = sortedRows.slice(0, 80);
+    const ideals = new Map<number, number>();
+    visibleCols.forEach((ci) => {
+      const hLen = colLabel(ci).replace(/[^\x00-\x7F]/g, "  ").length; // emoji = 2
+      let maxData = 0;
+      for (const { row } of sample) {
+        const v = row[ci];
+        if (v !== null && v !== undefined) maxData = Math.max(maxData, String(v).length);
+      }
+      const ideal = Math.max(hLen * CH_HDR, maxData * CH_DATA) + PAD;
+      ideals.set(ci, Math.min(MAX_W, Math.max(MIN_W, ideal)));
+    });
+    const totalIdeal = NUM_W + [...ideals.values()].reduce((a, b) => a + b, 0);
+    const widths = new Map<number, number>();
+    if (totalIdeal <= VIEWPORT) {
+      // Tout tient : on étire uniformément pour remplir
+      const extra = (VIEWPORT - totalIdeal) / visibleCols.length;
+      visibleCols.forEach((ci) => widths.set(ci, (ideals.get(ci) ?? MIN_W) + extra));
+    } else {
+      // Compression proportionnelle avec min garanti
+      const available = VIEWPORT - NUM_W - visibleCols.length * MIN_W;
+      const idealTotal = [...ideals.values()].reduce((a, b) => a + b, 0) - visibleCols.length * MIN_W;
+      const ratio = idealTotal > 0 ? Math.max(0, available) / idealTotal : 0;
+      visibleCols.forEach((ci) => {
+        const ideal = ideals.get(ci) ?? MIN_W;
+        widths.set(ci, Math.round(MIN_W + (ideal - MIN_W) * ratio));
+      });
+    }
+    return widths;
+  }, [sortedRows, visibleCols, headers, mapping, extras, poidsUnit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Détection des lignes atypiques (visuel uniquement)
+  const anomalyRowSet = useMemo(() => {
+    if (allRows.length === 0) return new Set<number>();
+    const visibleRIs = allRows.map((_, ri) => ri).filter((ri) => !hiddenRows.has(ri));
+    if (visibleRIs.length === 0) return new Set<number>();
+    const counts = visibleRIs.map((ri) =>
+      allRows[ri].filter((v) => v !== null && v !== undefined && String(v).trim() !== "").length
+    );
+    const sorted = [...counts].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const anomalous = new Set<number>();
+    visibleRIs.forEach((ri, idx) => { if (counts[idx] < median - 1) anomalous.add(ri); });
+    return anomalous;
+  }, [allRows, hiddenRows]);
+
+  // Résoudre le format de groupement : par nom de colonne réel OU par clé logique
+  const getColFmt = (ci: number): string => {
+    const byName = splitFormats[headers[ci]];
+    if (byName) return byName;
+    if (ci === refColIdx)   return splitFormats["reference"] ?? "";
+    if (ci === poidsColIdx) return splitFormats["poids"]     ?? "";
+    const rangIdx = mapping.rang ? headers.indexOf(mapping.rang) : -1;
+    if (ci === rangIdx)     return splitFormats["rang"]      ?? "";
+    const exIdx = extras.findIndex((ex) => ex.col && headers.indexOf(ex.col) === ci);
+    if (exIdx >= 0)         return splitFormats[`extra_${exIdx}`] ?? "";
+    return "";
+  };
+
   const handleSortCol = (ci: number) => {
     if (selectMode === "col") { toggleSelectItem(ci); return; }
     if (selectMode !== "none") return;
-    if (sortCol === ci) setSortDir((d) => d === "asc" ? "desc" : "asc");
-    else { setSortCol(ci); setSortDir("asc"); }
+    if (sortCol !== ci) { setSortCol(ci); setSortDir("asc"); }
+    else if (sortDir === "asc") { setSortDir("desc"); }
+    else { setSortCol(null); }
     setPageIdx(0);
   };
 
   const css = `
-    .pt-table { border-collapse: collapse; width: 100%; font-size: 18px; }
+    .pt-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 18px; }
     .pt-table thead th {
       background: #131E2E; color: ${T.textMuted};
-      font-size: 14px; letter-spacing: 0.09em; text-transform: uppercase;
+      font-size: 14px; letter-spacing: 0.07em; text-transform: uppercase;
       padding: 0; text-align: left;
       border-bottom: 2px solid ${T.border};
-      border-right: 1px solid ${T.border}33;
-      white-space: nowrap; position: sticky; top: 0; z-index: 2;
+      border-right: 1px solid #7C3AED88;
+      white-space: normal; word-break: break-word;
+      position: sticky; top: 0; z-index: 2;
       font-weight: 700; vertical-align: top;
     }
     .pt-table thead th .th-inner {
-      padding: 8px 10px 4px; display: flex; align-items: center; gap: 4px;
+      padding: 6px 8px 3px; display: flex; align-items: center; gap: 3px;
       cursor: pointer; user-select: none; transition: color 0.12s;
     }
     .pt-table thead th .th-inner:hover { color: ${T.accent}; }
@@ -1617,16 +1730,16 @@ function TablePage() {
       width: 36px; min-width: 36px; text-align: center; position: sticky; top: 0;
       z-index: 3; vertical-align: top; padding: 0; }
     .pt-table td.td-num {
-      background: #0E1826; border-right: 1px solid ${T.border};
+      background: #0E1826; border-right: 1px solid #7C3AED88;
       width: 36px; min-width: 36px; text-align: center;
       color: ${T.textDim}; font-size: 10px; padding: 7px 4px;
       white-space: nowrap; user-select: none;
     }
     .pt-table td {
-      padding: 9px 12px; border-bottom: 1px solid ${T.border}22;
-      border-right: 1px solid ${T.border}11;
+      padding: 9px 10px; border-bottom: 1px solid ${T.border}22;
+      border-right: 1px solid #7C3AED44;
       color: #C8D8E8; white-space: nowrap;
-      max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+      overflow: hidden; text-overflow: ellipsis;
     }
     .pt-table tr:hover td, .pt-table tr:hover .td-num { background: ${T.rowHover}; }
     .pt-table tr.row-sel td { background: ${T.selRowBg} !important; color: ${T.selRowTxt}; }
@@ -1665,13 +1778,13 @@ function TablePage() {
     .dim-chip.on { color: #A78BFA; border-color: #3D2A6A; background: #160F2A; }
     .dim-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
     .page-btn {
-      background: ${T.bgCard}; border: 1px solid ${T.border2}; border-radius: 5px;
-      color: ${T.textMuted}; font-family: 'Share Tech Mono', monospace; font-size: 11px;
+      background: #160F2A; border: 1px solid #3D2A6A; border-radius: 5px;
+      color: #A78BFA; font-family: 'Share Tech Mono', monospace; font-size: 11px;
       padding: 4px 9px; cursor: pointer; transition: all 0.12s;
     }
-    .page-btn:hover:not(:disabled) { border-color: ${T.accent}; color: ${T.accent}; }
-    .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-    .page-btn.cur { background: ${T.accent}22; border-color: ${T.accent}; color: ${T.accent}; font-weight: 700; }
+    .page-btn:hover:not(:disabled) { border-color: #A78BFA; color: #D4BBFF; background: #1E1238; }
+    .page-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .page-btn.cur { background: #7C3AED33; border-color: #A78BFA; color: #D4BBFF; font-weight: 700; }
     .pt-modal-overlay {
       position: fixed; inset: 0; background: #00000088; z-index: 200;
       display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -1716,6 +1829,19 @@ function TablePage() {
             <div className={`dim-chip${dimRepeated ? " on" : ""}`} onClick={() => setDimRepeated((v) => !v)}>
               <span className="dim-dot" />Rép.
             </div>
+            <div
+              className={`dim-chip${autoRefFmt ? " on" : ""}`}
+              onClick={() => setAutoRefFmt((v) => !v)}
+              title="Formatage automatique des références"
+            >🔢 Réf.</div>
+            {poidsColIdx >= 0 && (
+              <button
+                className="ste-btn"
+                onClick={() => setPoidsUnit((u) => u === "t" ? "kg" : "t")}
+                style={{ color: poidsUnit === "kg" ? T.warning : undefined, borderColor: poidsUnit === "kg" ? `${T.warning}66` : undefined }}
+                title="Basculer tonnes / kilos"
+              >⚖️ {poidsUnit}</button>
+            )}
             <button
               className={`ste-btn${selectMode === "col" ? " active" : ""}`}
               onClick={() => { setSelectMode(selectMode === "col" ? "none" : "col"); setSelectedItems(new Set()); }}
@@ -1763,7 +1889,7 @@ function TablePage() {
           {filteredRows.length} ligne{filteredRows.length !== 1 ? "s" : ""}
         </span>
         {dimRepeated && (
-          <span style={{ color: T.repeat, fontSize: 10 }}>◆ Grises = répétitions</span>
+          <span style={{ color: T.repeat, fontSize: 10 }}>◆ Répétitions signalées</span>
         )}
         {addedRows.length > 0 && (
           <span style={{ color: T.success, fontSize: 10 }}>+ {addedRows.length} ajoutée(s)</span>
@@ -1793,7 +1919,7 @@ function TablePage() {
                 if (isSel) cls += " th-col-del";
                 if (isSortedCol) cls += " th-sorted";
                 return (
-                  <th key={ci} className={cls}>
+                  <th key={ci} className={cls} style={{ width: colWidths.get(ci) ?? 60 }}>
                     <div className="th-inner" onClick={() => handleSortCol(ci)}>
                       {editingHeader === ci ? (
                         <input
@@ -1815,6 +1941,7 @@ function TablePage() {
                         </span>
                       )}
                       {isSortedCol && <span style={{ fontSize: 9, flexShrink: 0 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                      {!isSortedCol && <span style={{ fontSize: 8, flexShrink: 0, opacity: 0.2 }}>⇅</span>}
                     </div>
                     <div className="th-filter">
                       <input
@@ -1838,7 +1965,11 @@ function TablePage() {
                 <tr
                   key={ri}
                   className={`${isRowSel ? "row-sel" : ""} ${isAdded ? "added-row" : ""} ${selectMode === "none" ? "click-row" : ""}`}
-                  style={isPointed ? { background: "#0A1F10", outline: `1px solid ${T.success}44` } : undefined}
+                style={isPointed
+                    ? { background: "#0A1F10", outline: `1px solid ${T.success}44` }
+                    : anomalyRowSet.has(ri)
+                      ? { background: "#1E0A0A", outline: `1px solid ${T.error}33` }
+                      : undefined}
                   onClick={() => {
                     if (selectMode === "row") { toggleSelectItem(ri); return; }
                     if (selectMode === "none") setModalRow({ row, rowNum: ri + 1, ri });
@@ -1853,10 +1984,20 @@ function TablePage() {
                   </td>
                   {visibleCols.map((ci) => {
                     const rawCell = rowOverrides.get(ri)?.[ci] !== undefined ? rowOverrides.get(ri)![ci] : (row[ci] ?? null);
-                    const cell   = rawCell;
-                    const strVal = cell !== null ? String(cell) : null;
-                    const fmt    = splitFormats[headers[ci]] ?? "";
-                    const display = strVal !== null ? (fmt ? applyGrouping(strVal, fmt) : strVal) : null;
+                    const strVal = rawCell !== null ? String(rawCell) : null;
+                    const fmt    = getColFmt(ci);
+                    let display: string | null;
+                    if (strVal === null) {
+                      display = null;
+                    } else if (ci === poidsColIdx) {
+                      const raw = parseFloat(strVal) || 0;
+                      const val = poidsUnit === "kg" ? (raw * 1000).toFixed(0) : raw.toFixed(3);
+                      display = applyGrouping(val + (poidsUnit === "kg" ? " kg" : " t"), fmt);
+                    } else if (ci === refColIdx && autoRefFmt) {
+                      display = autoFormatRef(strVal, fmt);
+                    } else {
+                      display = fmt ? applyGrouping(strVal, fmt) : strVal;
+                    }
                     const isRep  = !isAdded && dimRepeated && strVal !== null && (repetitiveByCol.get(ci)?.has(strVal) ?? false);
                     return (
                       <td key={ci} title={strVal ?? ""} className={isRep ? "cell-rep" : ""}>
@@ -1891,20 +2032,20 @@ function TablePage() {
           }, [])
           .map((item, idx) =>
             item === "…"
-              ? <span key={`e${idx}`} style={{ color: T.textDim, fontSize: 11 }}>…</span>
+              ? <span key={`e${idx}`} style={{ color: "#7C3AED66", fontSize: 11 }}>…</span>
               : <button key={item} className={`page-btn${item === safePage ? " cur" : ""}`} onClick={() => setPageIdx(item as number)}>{(item as number) + 1}</button>
           )}
         <button className="page-btn" onClick={() => setPageIdx((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1}>›</button>
         <button className="page-btn" onClick={() => setPageIdx(totalPages - 1)} disabled={safePage >= totalPages - 1}>»</button>
-        <span style={{ color: T.textDim, fontSize: 10, margin: "0 4px" }}>|</span>
+        <span style={{ color: "#7C3AED88", fontSize: 10, margin: "0 4px" }}>|</span>
         <select
           value={pageSize}
           onChange={(e) => { setPageSize(Number(e.target.value)); setPageIdx(0); }}
-          style={{ background: T.bgCard, border: `1px solid ${T.border2}`, borderRadius: 5, color: T.textMuted, fontFamily: "'Share Tech Mono', monospace", fontSize: 11, padding: "3px 6px", cursor: "pointer" }}
+          style={{ background: "#160F2A", border: "1px solid #3D2A6A", borderRadius: 5, color: "#A78BFA", fontFamily: "'Share Tech Mono', monospace", fontSize: 11, padding: "3px 6px", cursor: "pointer" }}
         >
           {PAGE_SIZES.map((s) => <option key={s} value={s}>{s} / page</option>)}
         </select>
-        <span style={{ color: T.textDim, fontSize: 10 }}>
+        <span style={{ color: "#7C3AED99", fontSize: 10 }}>
           {safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, sortedRows.length)} / {sortedRows.length}
         </span>
       </div>
@@ -2013,7 +2154,7 @@ function TablePage() {
                 {visibleCols.map((ci) => {
                   const val    = row[ci];
                   const strVal = val !== null && val !== undefined ? String(val) : null;
-                  const fmt    = splitFormats[headers[ci]] ?? "";
+                  const fmt    = getColFmt(ci);
                   const display = strVal !== null ? (fmt ? applyGrouping(strVal, fmt) : strVal) : null;
                   return (
                     <div key={ci} className="pt-modal-row">
