@@ -606,6 +606,7 @@ function ImportPage() {
     showToast, setActiveTab,
     headers, setHeaders,
     hiddenCols, setHiddenCols,
+    hiddenSheets, setHiddenSheets,
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -741,25 +742,35 @@ function ImportPage() {
 
       {/* ── Step indicator ── */}
       <div style={{ display: "flex", background: T.bgDark, borderBottom: `1px solid ${T.border}` }}>
-        {STEP_LABELS.map((l, i) => (
-          <div key={l} style={{
-            flex: 1, textAlign: "center", padding: "10px 4px",
-            borderBottom: `3px solid ${step > i ? T.success : step === i + 1 ? T.accent : "transparent"}`,
-          }}>
-            <div style={{
-              color: step > i ? T.success : step === i + 1 ? T.accent : T.textDim,
-              fontWeight: 800, fontSize: 12,
-            }}>
-              <span style={{
-                display: "inline-block", width: 20, height: 20, borderRadius: "50%",
-                background: step > i ? T.success : step === i + 1 ? T.accent : T.border,
-                color: "#0F172A", lineHeight: "20px", fontSize: 11, marginRight: 4,
-                fontWeight: 900, textAlign: "center",
-              }}>{i + 1}</span>
-              {l}
+        {STEP_LABELS.map((l, i) => {
+          const reachable = i + 1 < step;
+          return (
+            <div
+              key={l}
+              onClick={() => { if (reachable) setStep((i + 1) as 1 | 2 | 3); }}
+              style={{
+                flex: 1, textAlign: "center", padding: "10px 4px",
+                borderBottom: `3px solid ${step > i ? T.success : step === i + 1 ? T.accent : "transparent"}`,
+                cursor: reachable ? "pointer" : "default",
+                opacity: reachable ? 1 : undefined,
+                transition: "opacity 0.15s",
+              }}
+            >
+              <div style={{
+                color: step > i ? T.success : step === i + 1 ? T.accent : T.textDim,
+                fontWeight: 800, fontSize: 12,
+              }}>
+                <span style={{
+                  display: "inline-block", width: 20, height: 20, borderRadius: "50%",
+                  background: step > i ? T.success : step === i + 1 ? T.accent : T.border,
+                  color: "#0F172A", lineHeight: "20px", fontSize: 11, marginRight: 4,
+                  fontWeight: 900, textAlign: "center",
+                }}>{i + 1}</span>
+                {l}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div style={{ padding: 16 }}>
@@ -809,24 +820,59 @@ function ImportPage() {
                 <div
                   onClick={() => setOpenOnglets((o) => !o)}
                   style={{ color: T.accent, fontWeight: 700, fontSize: 12, marginBottom: openOnglets ? 8 : 0, textTransform: "uppercase", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>🗂 Onglets ({sheetNames.length})</span>
+                  <span>🗂 Onglets ({sheetNames.length - hiddenSheets.size}/{sheetNames.length})</span>
                   <span style={{ opacity: 0.5, fontSize: 10 }}>{openOnglets ? "▲" : "▼"}</span>
                 </div>
-                {openOnglets && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {sheetNames.map((name) => (
-                    <button
-                      key={name}
-                      onClick={() => { if (workbook) { setActiveSheet(name); loadSheet(workbook, name); } }}
-                      style={{
-                        background: activeSheet === name ? T.accent : T.bgDark,
-                        color: activeSheet === name ? "#0F172A" : T.textMuted,
-                        border: `1px solid ${activeSheet === name ? T.accent : T.border2}`,
-                        borderRadius: 7, padding: "6px 12px", fontSize: 12, fontWeight: 700,
-                        cursor: "pointer", fontFamily: "'Share Tech Mono', monospace",
-                      }}
-                    >{name}</button>
-                  ))}
-                </div>}
+                {openOnglets && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    {sheetNames.map((name) => {
+                      const isActive = activeSheet === name;
+                      const isExcluded = hiddenSheets.has(name);
+                      return (
+                        <div key={name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <button
+                            onClick={() => { if (workbook && !isExcluded) { setActiveSheet(name); loadSheet(workbook, name); } }}
+                            style={{
+                              flex: 1, textAlign: "left",
+                              background: isActive ? T.accent : isExcluded ? T.bgDark : T.bgDark,
+                              color: isActive ? "#0F172A" : isExcluded ? T.textDim : T.textMuted,
+                              border: `1px solid ${isActive ? T.accent : T.border2}`,
+                              borderRadius: 7, padding: "6px 12px", fontSize: 12, fontWeight: 700,
+                              cursor: isExcluded ? "default" : "pointer",
+                              fontFamily: "'Share Tech Mono', monospace",
+                              opacity: isExcluded ? 0.45 : 1,
+                              textDecoration: isExcluded ? "line-through" : "none",
+                            }}
+                          >{name}</button>
+                          <button
+                            disabled={isActive}
+                            onClick={() => {
+                              if (isActive) return;
+                              setHiddenSheets((prev) => {
+                                const next = new Set(prev);
+                                next.has(name) ? next.delete(name) : next.add(name);
+                                return next;
+                              });
+                            }}
+                            title={isActive ? "Onglet actif — impossible à exclure" : isExcluded ? "Inclure cet onglet" : "Exclure cet onglet"}
+                            style={{
+                              flexShrink: 0,
+                              background: isExcluded ? `${T.success}22` : `${T.error}22`,
+                              border: `1px solid ${isExcluded ? T.success : T.error}55`,
+                              borderRadius: 6, padding: "5px 9px",
+                              color: isExcluded ? T.success : T.error,
+                              fontSize: 10, fontWeight: 800,
+                              cursor: isActive ? "not-allowed" : "pointer",
+                              opacity: isActive ? 0.3 : 1,
+                              fontFamily: "'Share Tech Mono', monospace",
+                              whiteSpace: "nowrap",
+                            }}
+                          >{isExcluded ? "✓ inclure" : "✕ exclure"}</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
