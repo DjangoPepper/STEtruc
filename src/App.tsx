@@ -83,6 +83,9 @@ interface AppState {
   setDimRepeated: React.Dispatch<React.SetStateAction<boolean>>;
   exportFileName: string;
   setExportFileName: React.Dispatch<React.SetStateAction<string>>;
+  // split/grouping formats keyed by header name
+  splitFormats: Record<string, string>;
+  setSplitFormats: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   // helpers
   loadSheet: (wb: XLSX.WorkBook, sheet: string) => void;
   handleFile: (file: File) => void;
@@ -166,6 +169,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [dimRepeated, setDimRepeated] = useState(true);
   const [exportFileName, setExportFileName] = useState("données_nettoyées");
+  const [splitFormats, setSplitFormats] = useState<Record<string, string>>({});
 
   // Stockage de l'état de chaque onglet (persist entre changements d'onglet)
   const sheetStates = useRef<Map<string, SheetState>>(new Map());
@@ -280,6 +284,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       selectedSheets, setSelectedSheets,
       dimRepeated, setDimRepeated,
       exportFileName, setExportFileName,
+      splitFormats, setSplitFormats,
       loadSheet, handleFile,
       allRows, repetitiveByCol,
       sheetStates,
@@ -465,6 +470,44 @@ function StatsBar() {
   );
 }
 
+// Header tout-en-un pour la page Pointage
+function PointageHeader() {
+  const { parsed, addedRows, hiddenCols, hiddenRows, headers, fileName } = useApp();
+  const visibleCols = headers.filter((_, i) => !hiddenCols.has(i)).length;
+  const allRows = parsed ? [...addedRows, ...parsed.rows] : [];
+  const visibleRows = allRows.filter((_, i) => !hiddenRows.has(i)).length;
+  return (
+    <div style={{
+      padding: "7px 14px",
+      background: T.bgDark,
+      borderBottom: `1px solid ${T.border}`,
+      display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+    }}>
+      <span style={{ color: T.text, fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>
+        Pointage
+      </span>
+      {fileName && (
+        <>
+          <span style={{ color: T.border2, fontSize: 12 }}>·</span>
+          <span style={{ color: T.textMuted, fontSize: 11, fontFamily: "'Share Tech Mono', monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 160 }}>
+            📄 {fileName}
+          </span>
+        </>
+      )}
+      {parsed && (
+        <>
+          <span style={{ color: T.border2, fontSize: 12 }}>·</span>
+          <span style={{ color: T.accent, fontWeight: 900, fontSize: 11 }}>{visibleCols}</span>
+          <span style={{ color: T.textDim, fontSize: 10, letterSpacing: "0.06em" }}>COL</span>
+          <span style={{ color: T.border2, fontSize: 12 }}>·</span>
+          <span style={{ color: T.success, fontWeight: 900, fontSize: 11 }}>{visibleRows}</span>
+          <span style={{ color: T.textDim, fontSize: 10, letterSpacing: "0.06em" }}>LIG</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 // Section title
 function SectionTitle({ icon, text, count, right }: {
   icon?: string; text: string; count?: number;
@@ -607,14 +650,14 @@ function ImportPage() {
     headers, setHeaders,
     hiddenCols, setHiddenCols,
     hiddenSheets, setHiddenSheets,
+    splitFormats, setSplitFormats,
   } = useApp();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [editableRows, setEditableRows] = useState<Record<string, string>[]>([]);
   const [editingHdr, setEditingHdr] = useState<number | null>(null);
-  // split formats: { [headerName]: "4 4 1" } for visual grouping in preview
-  const [splitFormats, setSplitFormats] = useState<Record<string, string>>({});
+  // split formats: now from global context
   const [splitEditingField, setSplitEditingField] = useState<string | null>(null);
   const [splitInputValue, setSplitInputValue] = useState("");
   const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string }>({
@@ -1249,7 +1292,7 @@ function ImportPage() {
                           { key: "rang",      label: "📍 Rang",      color: T.textMuted },
                           { key: "reference", label: "🏷 Référence", color: T.text },
                           { key: "poids",     label: `⚖️ Poids (${poidsUnit})`, color: T.warning },
-                          ...extras.filter((e) => e.col).map((e, i) => ({ key: `extra_${i}`, label: e.label || "EXTRA", color: T.success })),
+                          ...extras.map((e, i) => ({ key: `extra_${i}`, label: e.label || "EXTRA", color: T.success })),
                         ] as { key: string; label: string; color: string }[]).map(({ key, label }) => (
                           <th key={key} style={{ padding: "4px 6px", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>
                             {splitEditingField === key ? (
@@ -1306,9 +1349,9 @@ function ImportPage() {
                               return applyGrouping(val + (poidsUnit === "kg" ? "kg" : "t"), splitFormats["poids"] || "");
                             })() : "—"}
                           </td>
-                          {extras.filter((e) => e.col).map((e, i) => (
+                          {extras.map((e, i) => (
                             <td key={i} style={{ color: T.success, padding: "4px 6px", fontFamily: "monospace", fontSize: 11 }}>
-                              {applyGrouping(String(row[e.col] ?? "").slice(0, 24), splitFormats[`extra_${i}`] || "") || <span style={{ color: T.textDim }}>—</span>}
+                              {e.col ? applyGrouping(String(row[e.col] ?? "").slice(0, 24), splitFormats[`extra_${i}`] || "") || <span style={{ color: T.textDim }}>—</span> : <span style={{ color: T.textDim, fontSize: 10 }}>— — —</span>}
                             </td>
                           ))}
                         </tr>
@@ -1356,7 +1399,29 @@ function ImportPage() {
               <div style={{ display: "flex", gap: 10 }}>
                 <Btn onClick={() => setStep(2)} color={T.border2} textColor={T.textMuted} fullWidth>← Retour</Btn>
                 <Btn
-                  onClick={() => { showToast("✅ Fichier prêt", "success"); setActiveTab("tableau"); }}
+                  onClick={() => {
+                    // Apply extras: rename existing cols or add new empty cols
+                    if (parsed && extras.some((e) => e.label.trim())) {
+                      const newHeaders = [...headers];
+                      const newRows: RawData = parsed.rows.map((r) => [...r]);
+                      extras.forEach((ex) => {
+                        const label = ex.label.trim() || "EXTRA";
+                        if (ex.col) {
+                          // rename the existing column header
+                          const idx = newHeaders.indexOf(ex.col);
+                          if (idx >= 0) newHeaders[idx] = label;
+                        } else {
+                          // add a new empty column
+                          newHeaders.push(label);
+                          newRows.forEach((r) => r.push(null));
+                        }
+                      });
+                      setHeaders(newHeaders);
+                      setParsed({ ...parsed, headers: newHeaders, rows: newRows });
+                    }
+                    showToast("✅ Fichier prêt", "success");
+                    setActiveTab("tableau");
+                  }}
                   color={T.success} textColor="#0F172A" fullWidth
                 >📊 Voir le pointage →</Btn>
               </div>
@@ -1381,9 +1446,9 @@ function TablePage() {
     selectMode, setSelectMode, selectedItems, setSelectedItems,
     editingHeader, setEditingHeader,
     dimRepeated, setDimRepeated,
-    fileName,
     allRows, repetitiveByCol, addedRows,
     showToast, setActiveTab,
+    splitFormats,
   } = useApp();
 
   const [showAddRow,  setShowAddRow]  = useState(false);
@@ -1592,55 +1657,63 @@ function TablePage() {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: T.bg, paddingBottom: 64 }}>
       <style>{css}</style>
-      <PageHeader title="Pointage" subtitle={fileName ? `📄 ${fileName}` : undefined} />
-      <StatsBar />
+      {/* ── Pointage header — tout sur une ligne ── */}
+      <PointageHeader />
 
       {/* Toolbar */}
-      <div>
-        <div
-          style={{
-            padding: "5px 12px", background: T.bgDark, borderBottom: `1px solid ${T.border}`,
-            display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer",
-          }}
-          onClick={() => setOpenToolbar((o) => !o)}
-        >
-          <span style={{ fontSize: 10, color: T.textDim, letterSpacing: "0.08em", textTransform: "uppercase" }}>Outils</span>
-          <span style={{ fontSize: 10, color: T.textDim, opacity: 0.6 }}>{openToolbar ? "▲" : "▼"}</span>
+      <div style={{
+        margin: "8px 12px 4px",
+        border: "1px solid #7C3AED88",
+        borderRadius: 10,
+        background: T.bgDark,
+        overflow: "hidden",
+      }}>
+        <div style={{
+          padding: "6px 10px",
+          display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+        }}>
+          {/* Label */}
+          <span style={{ fontSize: 10, color: "#A78BFA", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, flexShrink: 0 }}>Outils</span>
+
+          {/* Tools — visible when expanded */}
+          {openToolbar && (
+            <>
+              <div className={`dim-chip${dimRepeated ? " on" : ""}`} onClick={() => setDimRepeated((v) => !v)}>
+                <span className="dim-dot" />Répétitions
+              </div>
+              <button
+                className={`ste-btn${selectMode === "col" ? " active" : ""}`}
+                onClick={() => { setSelectMode(selectMode === "col" ? "none" : "col"); setSelectedItems(new Set()); }}
+              >{selectMode === "col" ? "✓ " : ""}Colonnes</button>
+              <button
+                className={`ste-btn${selectMode === "row" ? " active" : ""}`}
+                onClick={() => { setSelectMode(selectMode === "row" ? "none" : "row"); setSelectedItems(new Set()); }}
+              >{selectMode === "row" ? "✓ " : ""}Lignes</button>
+              {selectedItems.size > 0 && (
+                <button className="ste-btn danger" onClick={selectMode === "col" ? applyColAction : applyRowDeletion}>
+                  {selectMode === "col" ? `Masquer ${selectedItems.size} col.` : `Masquer ${selectedItems.size} ligne(s)`}
+                </button>
+              )}
+              {(hiddenCols.size > 0 || hiddenRows.size > 0) && (
+                <button className="ste-btn" onClick={() => { setHiddenCols(new Set()); setHiddenRows(new Set()); }}>
+                  Restaurer tout
+                </button>
+              )}
+              {sortCol !== null && (
+                <button className="ste-btn" onClick={() => { setSortCol(null); setPageIdx(0); }}>✕ Tri</button>
+              )}
+              {Object.values(colFilters).some((v) => v.trim()) && (
+                <button className="ste-btn" onClick={() => { setColFilters({}); setPageIdx(0); }}>✕ Filtres</button>
+              )}
+            </>
+          )}
+
+          {/* Triangle retract — pushed to right */}
+          <span
+            onClick={() => setOpenToolbar((o) => !o)}
+            style={{ marginLeft: "auto", fontSize: 10, color: "#A78BFA", opacity: 0.7, cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
+          >{openToolbar ? "▲" : "▼"}</span>
         </div>
-        {openToolbar && (
-          <div style={{
-            padding: "8px 12px", background: T.bgDark, borderBottom: `1px solid ${T.border}`,
-            display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center",
-          }}>
-            <div className={`dim-chip${dimRepeated ? " on" : ""}`} onClick={() => setDimRepeated((v) => !v)}>
-              <span className="dim-dot" />Répétitions
-            </div>
-            <button
-              className={`ste-btn${selectMode === "col" ? " active" : ""}`}
-              onClick={() => { setSelectMode(selectMode === "col" ? "none" : "col"); setSelectedItems(new Set()); }}
-            >{selectMode === "col" ? "✓ " : ""}Colonnes</button>
-            <button
-              className={`ste-btn${selectMode === "row" ? " active" : ""}`}
-              onClick={() => { setSelectMode(selectMode === "row" ? "none" : "row"); setSelectedItems(new Set()); }}
-            >{selectMode === "row" ? "✓ " : ""}Lignes</button>
-            {selectedItems.size > 0 && (
-              <button className="ste-btn danger" onClick={selectMode === "col" ? applyColAction : applyRowDeletion}>
-                {selectMode === "col" ? `Masquer ${selectedItems.size} col.` : `Masquer ${selectedItems.size} ligne(s)`}
-              </button>
-            )}
-            {(hiddenCols.size > 0 || hiddenRows.size > 0) && (
-              <button className="ste-btn" onClick={() => { setHiddenCols(new Set()); setHiddenRows(new Set()); }}>
-                Restaurer tout
-              </button>
-            )}
-            {sortCol !== null && (
-              <button className="ste-btn" onClick={() => { setSortCol(null); setPageIdx(0); }}>✕ Tri</button>
-            )}
-            {Object.values(colFilters).some((v) => v.trim()) && (
-              <button className="ste-btn" onClick={() => { setColFilters({}); setPageIdx(0); }}>✕ Filtres</button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Status hints */}
@@ -1741,10 +1814,12 @@ function TablePage() {
                   {visibleCols.map((ci) => {
                     const cell   = row[ci] ?? null;
                     const strVal = cell !== null ? String(cell) : null;
+                    const fmt    = splitFormats[headers[ci]] ?? "";
+                    const display = strVal !== null ? (fmt ? applyGrouping(strVal, fmt) : strVal) : null;
                     const isRep  = !isAdded && dimRepeated && strVal !== null && (repetitiveByCol.get(ci)?.has(strVal) ?? false);
                     return (
                       <td key={ci} title={strVal ?? ""} className={isRep ? "cell-rep" : ""}>
-                        {strVal ?? <span style={{ color: T.textDim }}>—</span>}
+                        {display ?? <span style={{ color: T.textDim }}>—</span>}
                       </td>
                     );
                   })}
