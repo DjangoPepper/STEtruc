@@ -1116,8 +1116,8 @@ function ImportPage() {
 
             {/* ── Preview : 5 first rows (mapped columns) ── */}
             {editableRows.length > 0 && (
-              <div style={{ background: "#0B2318", borderRadius: 10, marginBottom: 14, overflow: "hidden", border: `1px solid ${T.border2}` }}>
-                <div style={{ padding: "8px 12px", background: "#0F2E21", borderBottom: `1px solid ${T.border2}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ background: "#0C2D3A", borderRadius: 10, marginBottom: 14, overflow: "hidden", border: `1px solid #1A5F7A55` }}>
+                <div style={{ padding: "8px 12px", background: "#103848", borderBottom: `1px solid #1A5F7A55`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ color: T.textDim, fontSize: 11, textTransform: "uppercase", fontWeight: 700 }}>Aperçu — 5 premières lignes</span>
                   <span style={{ color: T.textDim, fontSize: 10 }}>Cliquer sur un header pour grouper</span>
                 </div>
