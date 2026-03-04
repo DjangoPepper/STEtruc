@@ -109,6 +109,8 @@ interface AppState {
   setSelectedDest: React.Dispatch<React.SetStateAction<string>>;
   rowDestinations: Map<number, string>;
   setRowDestinations: React.Dispatch<React.SetStateAction<Map<number, string>>>;
+  reassignedRows: Map<number, { from: string; to: string }[]>;
+  setReassignedRows: React.Dispatch<React.SetStateAction<Map<number, { from: string; to: string }[]>>>;
   // winwin modal
   winwinModalOpen: boolean;
   setWinwinModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -210,6 +212,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   ]);
   const [selectedDest, setSelectedDest] = useState<string>("");
   const [rowDestinations, setRowDestinations] = useState<Map<number, string>>(new Map());
+  const [reassignedRows, setReassignedRows] = useState<Map<number, { from: string; to: string }[]>>(new Map());
   const [winwinModalOpen, setWinwinModalOpen] = useState(false);
 
   // Stockage de l'état de chaque onglet (persist entre changements d'onglet)
@@ -278,6 +281,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       setPointedRows(new Set());
       setRowOverrides(new Map());
       setRowDestinations(new Map());
+      setReassignedRows(new Map());
       setSplitFormats({});
       loadSheet(wb, defaultSheet);
     };
@@ -343,6 +347,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       destinations, setDestinations,
       selectedDest, setSelectedDest,
       rowDestinations, setRowDestinations,
+      reassignedRows, setReassignedRows,
       winwinModalOpen, setWinwinModalOpen,
       loadSheet, handleFile,
       allRows, repetitiveByCol,
@@ -1275,15 +1280,6 @@ function ImportPage() {
                   style={{ padding: "8px 14px", background: T.bgDark, borderBottom: openMapping ? `1px solid ${T.border2}` : "none", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
                 >
                   <span style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase", flex: 1 }}>🗂 Mapping colonnes</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setExtras((exs) => [...exs, { col: "", label: "EXTRA" }]); }}
-                    style={{
-                      background: `${T.success}22`, border: `1px solid ${T.success}55`,
-                      borderRadius: 7, color: T.success, fontSize: 11, fontWeight: 700,
-                      cursor: "pointer", padding: "4px 12px",
-                      fontFamily: "'Share Tech Mono', monospace",
-                    }}
-                  >+ Colonne</button>
                   <span style={{ color: T.textDim, fontSize: 10, opacity: 0.6, marginLeft: 4 }}>{openMapping ? "▲" : "▼"}</span>
                 </div>
                 {openMapping && <div style={{ padding: "10px 14px" }}>
@@ -1606,6 +1602,7 @@ function TablePage() {
     destinations, setDestinations,
     selectedDest, setSelectedDest,
     rowDestinations, setRowDestinations,
+    reassignedRows: _reassignedRows, setReassignedRows,
   } = useApp();
 
   const [showAddRow,  setShowAddRow]  = useState(false);
@@ -1619,6 +1616,10 @@ function TablePage() {
   const [openMouvements, setOpenMouvements] = useState(false);
   const [newDestName, setNewDestName] = useState("");
   const [confirmClearDest, setConfirmClearDest] = useState(false);
+  const [confirmReassign, setConfirmReassign] = useState<{ ri: number; from: string; to: string } | null>(null);
+  const [doubleVerif, setDoubleVerif] = useState(false);
+  const [doubleVerifModal, setDoubleVerifModal] = useState<{ ri: number; ref: string; correct: number; choices: number[]; error: boolean } | null>(null);
+  const [confirmUnpoint, setConfirmUnpoint] = useState<{ ri: number; ref: string } | null>(null);
 
   if (!parsed) {
     return (
@@ -1674,7 +1675,7 @@ function TablePage() {
   if (mapping.rang)      { const i = headers.indexOf(mapping.rang);      if (i >= 0) mappingLabels.set(i, "📍 Rang"); }
   if (mapping.reference) { const i = headers.indexOf(mapping.reference); if (i >= 0) mappingLabels.set(i, "🏷 Référence"); }
   if (mapping.poids)     { const i = headers.indexOf(mapping.poids);     if (i >= 0) mappingLabels.set(i, `⚖️ Poids(${poidsUnit})`); }
-  if (mapping.dch)       { const i = headers.indexOf(mapping.dch);       if (i >= 0) mappingLabels.set(i, "🏗️ Destination"); }
+  if (mapping.dch)       { const i = headers.indexOf(mapping.dch);       if (i >= 0) mappingLabels.set(i, "🏗️ DEST"); }
   extras.forEach((ex) => {
     if (ex.col && ex.label.trim()) {
       const i = headers.indexOf(ex.col);
@@ -1718,6 +1719,7 @@ function TablePage() {
   const refColIdx   = mapping.reference ? headers.indexOf(mapping.reference)  : -1;
   const poidsColIdx = mapping.poids     ? headers.indexOf(mapping.poids)      : -1;
   const dchColIdx   = mapping.dch       ? headers.indexOf(mapping.dch)        : -1;
+  const rangColIdx  = mapping.rang      ? headers.indexOf(mapping.rang)       : -1;
 
   // Stats par destination
   const destStats = useMemo(() => {
@@ -1798,10 +1800,8 @@ function TablePage() {
     if (byName) return byName;
     if (ci === refColIdx)   return splitFormats["reference"] ?? "";
     if (ci === poidsColIdx) return splitFormats["poids"]     ?? "";
-    const rangIdx = mapping.rang ? headers.indexOf(mapping.rang) : -1;
-    if (ci === rangIdx)     return splitFormats["rang"]      ?? "";
-    const dchIdx = mapping.dch ? headers.indexOf(mapping.dch) : -1;
-    if (ci === dchIdx)      return splitFormats["dch"]       ?? "";
+    if (ci === rangColIdx)  return splitFormats["rang"]      ?? "";
+    if (ci === dchColIdx)   return splitFormats["dch"]       ?? "";
     const exIdx = extras.findIndex((ex) => ex.col && headers.indexOf(ex.col) === ci);
     if (exIdx >= 0)         return splitFormats[`extra_${exIdx}`] ?? "";
     return "";
@@ -2015,7 +2015,28 @@ function TablePage() {
           {/* En-tête */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: "#A78BFA", letterSpacing: "0.04em" }}>Mouvements</span>
-            <div style={{ display: "flex", gap: 6 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div
+                onClick={() => setDoubleVerif(v => !v)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
+                  background: doubleVerif ? "#34D39922" : T.bgDark,
+                  border: `1px solid ${doubleVerif ? "#34D399" : T.border2}`,
+                  borderRadius: 20, padding: "3px 10px 3px 6px", userSelect: "none",
+                }}
+              >
+                <div style={{
+                  width: 28, height: 16, borderRadius: 8, position: "relative",
+                  background: doubleVerif ? "#34D399" : T.border2, transition: "background 0.2s",
+                }}>
+                  <div style={{
+                    position: "absolute", top: 2, left: doubleVerif ? 14 : 2,
+                    width: 12, height: 12, borderRadius: "50%",
+                    background: "#fff", transition: "left 0.2s",
+                  }} />
+                </div>
+                <span style={{ fontSize: 10, color: doubleVerif ? "#34D399" : T.textDim, fontWeight: 600 }}>Double vérif</span>
+              </div>
               <button className="ste-btn" onClick={() => setOpenMouvements(false)} style={{ fontSize: 11 }}>✕</button>
             </div>
           </div>
@@ -2205,7 +2226,7 @@ function TablePage() {
                   <button
                     className="ste-btn danger"
                     style={{ flex: 1 }}
-                    onClick={() => { setRowDestinations(new Map()); setConfirmClearDest(false); }}
+                    onClick={() => { setRowDestinations(new Map()); setReassignedRows(new Map()); setConfirmClearDest(false); }}
                   >✖ Effacer</button>
                 </div>
               </div>
@@ -2270,7 +2291,7 @@ function TablePage() {
                         <span
                           onDoubleClick={() => selectMode === "none" && setEditingHeader(ci)}
                           title="Double-cliquer pour renommer"
-                          style={{ flex: 1, ...(ci === poidsColIdx ? { whiteSpace: "nowrap", fontSize: 12 } : (ci === refColIdx || ci === destIdx || ci === dchColIdx) ? { fontSize: 13 } : {}) }}
+                          style={{ flex: 1, ...(ci === poidsColIdx ? { whiteSpace: "nowrap", fontSize: 12 } : (ci === destIdx || ci === dchColIdx) ? { fontSize: 12 } : (ci === refColIdx || ci === rangColIdx) ? { fontSize: 13 } : {}) }}
                         >
                           {colLabel(ci)}
                         </span>
@@ -2314,12 +2335,17 @@ function TablePage() {
                     if (selectMode === "row") { toggleSelectItem(ri); return; }
                     if (selectMode === "dest") {
                       if (selectedDest) {
-                        setRowDestinations((prev) => {
-                          const next = new Map(prev);
-                          if (next.get(ri) === selectedDest) next.delete(ri);
-                          else next.set(ri, selectedDest);
-                          return next;
-                        });
+                        const existing = rowDestinations.get(ri);
+                        if (existing && existing !== selectedDest) {
+                          setConfirmReassign({ ri, from: existing, to: selectedDest });
+                        } else {
+                          setRowDestinations((prev) => {
+                            const next = new Map(prev);
+                            if (next.get(ri) === selectedDest) next.delete(ri);
+                            else next.set(ri, selectedDest);
+                            return next;
+                          });
+                        }
                       }
                       return;
                     }
@@ -2408,6 +2434,63 @@ function TablePage() {
       {/* Add row modal */}
       {showAddRow && <AddRowModal onClose={() => setShowAddRow(false)} />}
 
+      {/* Confirmation réaffectation */}
+      {confirmUnpoint && (
+        <div
+          onClick={() => setConfirmUnpoint(null)}
+          style={{ position: "fixed", inset: 0, background: "#000000aa", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: T.bgCard, border: `1px solid ${T.error}66`, borderRadius: 14, padding: "22px 20px", maxWidth: 300, width: "90%", boxShadow: "0 20px 60px #00000099" }}
+          >
+            <div style={{ color: T.error, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>❌ Dépointer la ligne ?</div>
+            <div style={{ color: T.textMuted, fontSize: 12, marginBottom: 18 }}>
+              Retirer le pointage de <strong style={{ color: T.accent, fontFamily: "monospace" }}>{confirmUnpoint.ref}</strong> ?<br />
+              <span style={{ color: T.textDim, fontSize: 11 }}>Cette action est réversible.</span>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="ste-btn" style={{ flex: 1 }} onClick={() => setConfirmUnpoint(null)}>Annuler</button>
+              <button className="ste-btn danger" style={{ flex: 1 }} onClick={() => {
+                setPointedRows(prev => { const next = new Set(prev); next.delete(confirmUnpoint!.ri); return next; });
+                setConfirmUnpoint(null);
+              }}>Dépointer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmReassign && (
+        <div
+          onClick={() => setConfirmReassign(null)}
+          style={{ position: "fixed", inset: 0, background: "#000000aa", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: T.bgCard, border: `1px solid ${T.warning}66`, borderRadius: 14, padding: "22px 20px", maxWidth: 300, width: "90%", boxShadow: "0 20px 60px #00000099" }}
+          >
+            <div style={{ color: T.warning, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>⚠️ Ligne déjà affectée</div>
+            <div style={{ color: T.textMuted, fontSize: 12, marginBottom: 18 }}>
+              Cette ligne est déjà affectée à <strong style={{ color: (destinations.find(d => d.name === confirmReassign.from)?.color ?? T.accent) }}>{confirmReassign.from}</strong>.<br />
+              Réaffecter à <strong style={{ color: (destinations.find(d => d.name === confirmReassign.to)?.color ?? T.accent) }}>{confirmReassign.to}</strong> ?
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="ste-btn" style={{ flex: 1 }} onClick={() => setConfirmReassign(null)}>Annuler</button>
+              <button className="ste-btn danger" style={{ flex: 1 }} onClick={() => {
+                setRowDestinations((prev) => { const next = new Map(prev); next.set(confirmReassign.ri, confirmReassign.to); return next; });
+                setReassignedRows((prev: Map<number, { from: string; to: string }[]>) => {
+                  const next = new Map(prev);
+                  const history: { from: string; to: string }[] = next.get(confirmReassign.ri) ?? [];
+                  next.set(confirmReassign.ri, [...history, { from: confirmReassign.from, to: confirmReassign.to }]);
+                  return next;
+                });
+                setConfirmReassign(null);
+              }}>Réaffecter</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Row detail / affectation modal */}
       {modalRow && (() => {
         const { row, rowNum, ri } = modalRow;
@@ -2422,6 +2505,38 @@ function TablePage() {
         const togglePointed = () => setPointedRows((prev) => {
           const next = new Set(prev); next.has(ri) ? next.delete(ri) : next.add(ri); return next;
         });
+        const isEmptyRow = row.every((cell, ci) => {
+          const v = rowOverrides.get(ri)?.[ci] !== undefined ? String(rowOverrides.get(ri)![ci] ?? "") : String(cell ?? "");
+          return v.trim() === "";
+        });
+        const handlePointerClick = () => {
+          if (isEmptyRow) return;
+          if (isPointed) {
+            setConfirmUnpoint({ ri, ref: refVal });
+            return;
+          }
+          if (doubleVerif && poidsIdx >= 0 && poidsVal) {
+            const realW = parseFloat(String(poidsVal).replace(",", "."));
+            if (!isNaN(realW) && realW > 0) {
+              const genFake = (): number => {
+                const pct = 0.02 + Math.random() * 0.07;
+                const sign = Math.random() > 0.5 ? 1 : -1;
+                return parseFloat((realW * (1 + sign * pct)).toFixed(realW < 10 ? 3 : 1));
+              };
+              let f1 = genFake();
+              let f2 = genFake();
+              let guard = 0;
+              while (guard++ < 20 && Math.abs(f1 - realW) < realW * 0.005) f1 = genFake();
+              guard = 0;
+              while (guard++ < 20 && (Math.abs(f2 - realW) < realW * 0.005 || Math.abs(f2 - f1) < realW * 0.005)) f2 = genFake();
+              const choices = [realW, f1, f2].sort(() => Math.random() - 0.5);
+              setModalRow(null);
+              setDoubleVerifModal({ ri, ref: refVal, correct: realW, choices, error: false });
+              return;
+            }
+          }
+          togglePointed();
+        };
         const setOverride = (ci: number, val: string) => setRowOverrides((prev) => {
           const next = new Map(prev);
           const r = { ...(next.get(ri) ?? {}) }; r[ci] = val; next.set(ri, r); return next;
@@ -2443,17 +2558,20 @@ function TablePage() {
               {/* Pointer toggle */}
               <div style={{ padding: "10px 16px", borderBottom: `1px solid ${T.border}22`, display: "flex", alignItems: "center", gap: 10 }}>
                 <button
-                  onClick={togglePointed}
+                  onClick={handlePointerClick}
                   style={{
                     padding: "8px 18px", borderRadius: 8, fontWeight: 800, fontSize: 13,
-                    fontFamily: "'Share Tech Mono', monospace", cursor: "pointer", transition: "all 0.15s",
+                    fontFamily: "'Share Tech Mono', monospace", transition: "all 0.15s",
+                    cursor: isEmptyRow ? "not-allowed" : "pointer",
+                    opacity: isEmptyRow ? 0.35 : 1,
                     background: isPointed ? `${T.success}22` : T.bgDark,
                     border: `2px solid ${isPointed ? T.success : T.border2}`,
                     color: isPointed ? T.success : T.textMuted,
                     boxShadow: isPointed ? `0 0 12px ${T.success}44` : "none",
                   }}
-                >{isPointed ? "✅ Pointé" : "○ Pointer"}</button>
+                >{isEmptyRow ? "⊘ Ligne vide" : isPointed ? "✅ Pointé" : "○ Pointer"}</button>
                 {isPointed && <span style={{ color: T.success, fontSize: 11 }}>✔ Confirmé dans l'état</span>}
+                {isEmptyRow && <span style={{ color: T.textDim, fontSize: 11 }}>Impossible de pointer une ligne vide</span>}
               </div>
 
               {/* Champs clés */}
@@ -2527,6 +2645,68 @@ function TablePage() {
           </div>
         );
       })()}
+
+      {/* Double Vérif modal */}
+      {doubleVerifModal && (() => {
+        const { ref, correct, choices, error } = doubleVerifModal;
+        const poidsFmt = splitFormats["poids"] ?? (poidsUnit === "kg" ? "2 3 3" : "2");
+        const unitLabel = poidsUnit === "kg" ? "kg" : "t";
+        const fmtChoice = (w: number) => {
+          const val = poidsUnit === "kg" ? (w * 1000).toFixed(0) : parseFloat(w.toFixed(3)).toString();
+          return applyGrouping(val, poidsFmt) + " " + unitLabel;
+        };
+        const handleChoice = (w: number) => {
+          if (error) return;
+          const isCorrect = Math.abs(w - correct) < 1e-9;
+          if (isCorrect) {
+            setPointedRows(prev => { const next = new Set(prev); next.add(doubleVerifModal!.ri); return next; });
+            setDoubleVerifModal(null);
+          } else {
+            setDoubleVerifModal(prev => prev ? { ...prev, error: true } : null);
+            setTimeout(() => setDoubleVerifModal(null), 5000);
+          }
+        };
+        return (
+          <div className="pt-modal-overlay" style={{ zIndex: 1100 }} onClick={() => !error && setDoubleVerifModal(null)}>
+            <div className="pt-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 320 }}>
+              <div className="pt-modal-hdr">
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ color: T.textDim, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase" }}>Double vérification</span>
+                  <span style={{ color: T.accent, fontWeight: 900, fontSize: 15, fontFamily: "'Share Tech Mono', monospace" }}>🏷 {ref}</span>
+                </div>
+                {!error && <button onClick={() => setDoubleVerifModal(null)} style={{ background: "none", border: "none", color: T.textDim, fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 0 }}>×</button>}
+              </div>
+              {error ? (
+                <div style={{ padding: "24px 16px", textAlign: "center" }}>
+                  <div style={{ fontSize: 36, marginBottom: 12 }}>❌</div>
+                  <div style={{ color: T.error, fontWeight: 800, fontSize: 14, marginBottom: 6 }}>Poids incorrect !</div>
+                  <div style={{ color: T.textDim, fontSize: 11 }}>Fermeture automatique dans 5 secondes…</div>
+                </div>
+              ) : (
+                <div style={{ padding: "16px" }}>
+                  <div style={{ color: T.textDim, fontSize: 11, marginBottom: 14, textAlign: "center" }}>
+                    Sélectionnez le <strong style={{ color: T.text }}>poids correct</strong> pour valider le pointage
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {choices.map((w, i) => (
+                      <button key={i} onClick={() => handleChoice(w)} style={{
+                        padding: "12px 16px", borderRadius: 10, cursor: "pointer",
+                        background: T.bgDark, border: `2px solid ${T.border2}`,
+                        color: T.warning, fontFamily: "'Share Tech Mono', monospace",
+                        fontSize: 16, fontWeight: 700, textAlign: "center",
+                        transition: "all 0.1s",
+                      }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = T.warning; (e.currentTarget as HTMLButtonElement).style.background = `${T.warning}11`; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = T.border2; (e.currentTarget as HTMLButtonElement).style.background = T.bgDark; }}
+                      >{fmtChoice(w)}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -2554,9 +2734,18 @@ function RapportPage() {
     parsed, headers, allRows, hiddenRows,
     mapping, extras, splitFormats,
     pointedRows,
-    destinations, rowDestinations,
+    destinations, rowDestinations, reassignedRows,
     poidsUnit, autoRefFmt,
   } = useApp();
+
+  const [openResume, setOpenResume] = useState(true);
+  const [openMouvements, setOpenMouvements] = useState(true);
+  const [openChargement, setOpenChargement] = useState(true);
+  const [openDechargement, setOpenDechargement] = useState(true);
+  const [openTally, setOpenTally] = useState(true);
+  const [openPointees, setOpenPointees] = useState(true);
+  const [openReaff, setOpenReaff] = useState(true);
+  const [tallyPrev, setTallyPrev] = useState<Record<string, { qty: string; weight: string }>>({}); 
 
   if (!parsed) {
     return (
@@ -2605,6 +2794,18 @@ function RapportPage() {
 
   const extraCols = extras.filter(e => e.col && e.label.trim());
 
+  const SectionHeader = ({ label, open, toggle, color }: { label: string; open: boolean; toggle: () => void; color: string }) => (
+    <div
+      onClick={toggle}
+      style={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none",
+        color, fontWeight: 800, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em",
+        marginBottom: open ? 10 : 0 }}
+    >
+      <span style={{ flex: 1 }}>{label}</span>
+      <span style={{ fontSize: 12, opacity: 0.55, transition: "transform 0.2s", display: "inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
+    </div>
+  );
+
   return (
     <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
       <PageHeader title="Rapport" subtitle="Synthèse pointage & mouvements" />
@@ -2613,12 +2814,16 @@ function RapportPage() {
 
         {/* Résumé général */}
         <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid ${T.border2}`, padding: "12px 14px", marginBottom: 12 }}>
-          <div style={{ color: T.textMuted, fontWeight: 800, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>📊 Résumé</div>
+          <SectionHeader label="📊 Résumé" open={openResume} toggle={() => setOpenResume(o => !o)} color={T.textMuted} />
+          {openResume && <div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
             {[
               { label: "Lignes totales",   val: String(totalRows),       color: T.text },
               { label: "Pointées",          val: String(totalPointed),    color: T.success },
               { label: "Affectées (dest.)", val: String(totalAffected),   color: "#A78BFA" },
+              ...(reassignedRows.size > 0 ? [
+                { label: "Réaffectations",  val: String(reassignedRows.size), color: T.error },
+              ] : []),
               ...(poidsIdx >= 0 ? [
                 { label: `Poids total`,     val: fmtWeight(totalWeight),  color: T.warning },
                 { label: `Poids affecté`,   val: fmtWeight(affectedWeight), color: "#A78BFA" },
@@ -2629,14 +2834,14 @@ function RapportPage() {
                 <div style={{ color, fontWeight: 700, fontSize: 14, fontFamily: "'Share Tech Mono', monospace" }}>{val}</div>
               </div>
             ))}
-          </div>
+          </div></div>}
         </div>
 
-        {/* Tableau par destination */}
+        {/* Tableau par destination - Mouvements */}
         {destStatsMap.size > 0 && (
           <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid #7C3AED66`, padding: "12px 14px", marginBottom: 12 }}>
-            <div style={{ color: "#A78BFA", fontWeight: 800, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>🏗️ Mouvements</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <SectionHeader label="🏗️ Mouvements" open={openMouvements} toggle={() => setOpenMouvements(o => !o)} color="#A78BFA" />
+            {openMouvements && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${T.border}` }}>
                   <th style={{ textAlign: "left", color: T.textDim, padding: "3px 8px 6px 0", fontWeight: 600 }}>Destination</th>
@@ -2671,15 +2876,128 @@ function RapportPage() {
                   </tr>
                 )}
               </tbody>
-            </table>
+            </table>}
           </div>
         )}
+
+        {/* Chargement */}
+        <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid #2563EB55`, padding: "12px 14px", marginBottom: 12 }}>
+          <SectionHeader label="🚢 Chargement" open={openChargement} toggle={() => setOpenChargement(o => !o)} color="#60A5FA" />
+          {openChargement && (
+            <div style={{ color: T.textDim, fontSize: 11, fontStyle: "italic" }}>Aucune donnée pour le moment.</div>
+          )}
+        </div>
+
+        {/* Déchargement */}
+        <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid #D9770655`, padding: "12px 14px", marginBottom: 12 }}>
+          <SectionHeader label="⚓ Déchargement" open={openDechargement} toggle={() => setOpenDechargement(o => !o)} color="#FB923C" />
+          {openDechargement && (
+            <div style={{ color: T.textDim, fontSize: 11, fontStyle: "italic" }}>Aucune donnée pour le moment.</div>
+          )}
+        </div>
+
+        {/* Tally */}
+        <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid #05966955`, padding: "12px 14px", marginBottom: 12 }}>
+          <SectionHeader label="📋 Tally" open={openTally} toggle={() => setOpenTally(o => !o)} color="#34D399" />
+          {openTally && (() => {
+            const tallyDests = destinations.length > 0 ? destinations : [];
+            const setPrev = (name: string, field: "qty" | "weight", val: string) =>
+              setTallyPrev(p => ({ ...p, [name]: { qty: p[name]?.qty ?? "", weight: p[name]?.weight ?? "", [field]: val } }));
+            const thStyle = (align: "left" | "right" | "center" = "right"): React.CSSProperties => ({
+              textAlign: align, color: T.textDim, padding: "3px 5px 5px", fontWeight: 600, fontSize: 10, whiteSpace: "nowrap"
+            });
+            const tdStyle = (color: string = T.text): React.CSSProperties => ({
+              textAlign: "right", padding: "4px 5px", fontFamily: "monospace", fontSize: 10, color
+            });
+            let sumTodayQty = 0, sumTodayW = 0, sumPrevQty = 0, sumPrevW = 0;
+            for (const d of tallyDests) {
+              const s = destStatsMap.get(d.name);
+              sumTodayQty += s?.count ?? 0;
+              sumTodayW   += s?.weight ?? 0;
+              sumPrevQty  += parseFloat(tallyPrev[d.name]?.qty ?? "0") || 0;
+              sumPrevW    += parseFloat(String(tallyPrev[d.name]?.weight ?? "0").replace(",", ".")) || 0;
+            }
+            return (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...thStyle("left"), padding: "3px 6px 0 0" }} rowSpan={2}>Destination</th>
+                      <th colSpan={2} style={{ textAlign: "center", color: "#60A5FA", fontSize: 10, fontWeight: 700, padding: "3px 4px 2px", borderBottom: `1px solid #60A5FA44` }}>TODAY</th>
+                      <th colSpan={2} style={{ textAlign: "center", color: "#FB923C", fontSize: 10, fontWeight: 700, padding: "3px 4px 2px", borderBottom: `1px solid #FB923C44` }}>PREVIOUSLY</th>
+                      <th colSpan={2} style={{ textAlign: "center", color: "#34D399", fontSize: 10, fontWeight: 700, padding: "3px 4px 2px", borderBottom: `1px solid #34D39944` }}>TOTAL</th>
+                    </tr>
+                    <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                      <th style={thStyle()}>Qté</th>
+                      <th style={thStyle()}>Poids</th>
+                      <th style={{ ...thStyle(), color: "#FB923C" }}>Qté</th>
+                      <th style={{ ...thStyle(), color: "#FB923C" }}>Poids</th>
+                      <th style={{ ...thStyle(), color: "#34D399" }}>Qté</th>
+                      <th style={{ ...thStyle(), color: "#34D399" }}>Poids</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tallyDests.map(d => {
+                      const s = destStatsMap.get(d.name);
+                      const tQty = s?.count ?? 0;
+                      const tW   = s?.weight ?? 0;
+                      const pQty = parseFloat(tallyPrev[d.name]?.qty ?? "0") || 0;
+                      const pW   = parseFloat(String(tallyPrev[d.name]?.weight ?? "0").replace(",", ".")) || 0;
+                      const totQty = tQty + pQty;
+                      const totW   = tW + pW;
+                      const inputStyle: React.CSSProperties = {
+                        width: 58, textAlign: "right", background: T.bgDark,
+                        border: `1px solid ${T.border2}`, borderRadius: 4,
+                        color: "#FB923C", fontFamily: "monospace", fontSize: 10,
+                        padding: "2px 4px"
+                      };
+                      return (
+                        <tr key={d.name} style={{ borderBottom: `1px solid ${T.border2}22` }}>
+                          <td style={{ padding: "4px 6px 4px 0" }}>
+                            <span style={{ background: `${d.color}22`, borderLeft: `3px solid ${d.color}`, padding: "1px 6px", borderRadius: 3, color: d.color, fontWeight: 700, fontSize: 10 }}>{d.name}</span>
+                          </td>
+                          <td style={tdStyle("#60A5FA")}>{tQty || "—"}</td>
+                          <td style={tdStyle("#60A5FA")}>{tW > 0 ? fmtWeight(tW) : "—"}</td>
+                          <td style={{ padding: "3px 5px", textAlign: "right" }}>
+                            <input type="number" min={0} style={inputStyle}
+                              value={tallyPrev[d.name]?.qty ?? ""}
+                              onChange={e => setPrev(d.name, "qty", e.target.value)}
+                              placeholder="0" />
+                          </td>
+                          <td style={{ padding: "3px 5px", textAlign: "right" }}>
+                            <input type="number" min={0} step="0.001" style={{ ...inputStyle, width: 70 }}
+                              value={tallyPrev[d.name]?.weight ?? ""}
+                              onChange={e => setPrev(d.name, "weight", e.target.value)}
+                              placeholder="0" />
+                          </td>
+                          <td style={tdStyle("#34D399")}>{totQty || "—"}</td>
+                          <td style={tdStyle("#34D399")}>{totW > 0 ? fmtWeight(totW) : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: `1px solid ${T.border}` }}>
+                      <td style={{ padding: "5px 6px 4px 0", color: T.textDim, fontSize: 10, fontStyle: "italic" }}>Total</td>
+                      <td style={tdStyle("#60A5FA")}><strong>{sumTodayQty || "—"}</strong></td>
+                      <td style={tdStyle("#60A5FA")}><strong>{sumTodayW > 0 ? fmtWeight(sumTodayW) : "—"}</strong></td>
+                      <td style={tdStyle("#FB923C")}><strong>{sumPrevQty || "—"}</strong></td>
+                      <td style={tdStyle("#FB923C")}><strong>{sumPrevW > 0 ? fmtWeight(sumPrevW) : "—"}</strong></td>
+                      <td style={tdStyle("#34D399")}><strong>{(sumTodayQty + sumPrevQty) || "—"}</strong></td>
+                      <td style={tdStyle("#34D399")}><strong>{(sumTodayW + sumPrevW) > 0 ? fmtWeight(sumTodayW + sumPrevW) : "—"}</strong></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            );
+          })()}
+        </div>
 
         {/* Lignes pointées */}
         {pointedRows.size > 0 && (
           <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid ${T.success}44`, padding: "12px 14px", marginBottom: 12 }}>
-            <div style={{ color: T.success, fontWeight: 800, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>✅ Lignes pointées ({pointedRows.size})</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <SectionHeader label={`✅ Lignes pointées (${pointedRows.size})`} open={openPointees} toggle={() => setOpenPointees(o => !o)} color={T.success} />
+            {openPointees && <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${T.border}` }}>
                   {rangIdx >= 0 && <th style={{ textAlign: "left", color: T.textDim, padding: "3px 6px 6px 0", fontWeight: 600 }}>📍 Rang</th>}
@@ -2711,11 +3029,66 @@ function RapportPage() {
                   );
                 })}
               </tbody>
-            </table>
+            </table>}
           </div>
         )}
 
-        {destStatsMap.size === 0 && pointedRows.size === 0 && (
+        {/* Réaffectations — doublons / erreurs potentiels */}
+        {reassignedRows.size > 0 && (
+          <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid ${T.error}55`, padding: "12px 14px", marginBottom: 12 }}>
+            <SectionHeader label={`⚠️ Réaffectations (${reassignedRows.size} ligne${reassignedRows.size > 1 ? "s" : ""})`} open={openReaff} toggle={() => setOpenReaff(o => !o)} color={T.error} />
+            {openReaff && <><div style={{ color: T.textDim, fontSize: 10, marginBottom: 8 }}>Ces lignes ont changé de destination — vérifier doublons ou erreurs de saisie.</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                  <th style={{ textAlign: "left", color: T.textDim, padding: "3px 6px 6px 0", fontWeight: 600 }}>#</th>
+                  {refIdx  >= 0 && <th style={{ textAlign: "left", color: T.textDim, padding: "3px 6px 6px", fontWeight: 600 }}>Référence</th>}
+                  {poidsIdx >= 0 && <th style={{ textAlign: "right", color: T.textDim, padding: "3px 6px 6px", fontWeight: 600 }}>Poids</th>}
+                  <th style={{ textAlign: "left", color: T.textDim, padding: "3px 6px 6px", fontWeight: 600 }}>Ancien</th>
+                  <th style={{ textAlign: "left", color: T.textDim, padding: "3px 0 6px 6px", fontWeight: 600 }}>Actuel</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...reassignedRows.entries()].map(([ri, history]) => {
+                  const row = allRows[ri];
+                  const refRaw = row && refIdx >= 0 ? String(row[refIdx] ?? "").slice(0, 20) : "";
+                  const refDisplay = autoRefFmt ? autoFormatRef(refRaw, splitFormats["reference"] || "") : applyGrouping(refRaw, splitFormats["reference"] || "");
+                  const poidsRaw = row && poidsIdx >= 0 ? parseFloat(String(row[poidsIdx] ?? "").replace(",", ".")) : NaN;
+                  const poidsDisplay = !isNaN(poidsRaw) ? fmtWeight(poidsRaw) : "—";
+                  const current = rowDestinations.get(ri) ?? "—";
+                  const currentColor = destinations.find(d => d.name === current)?.color ?? T.textDim;
+                  return (
+                    <tr key={ri} style={{ borderBottom: `1px solid ${T.border2}22` }}>
+                      <td style={{ padding: "4px 6px 4px 0", color: T.textDim, fontFamily: "monospace" }}>{ri + 1}</td>
+                      {refIdx >= 0 && <td style={{ padding: "4px 6px", color: T.text, fontFamily: "monospace", fontSize: 10 }}>{refDisplay || "—"}</td>}
+                      {poidsIdx >= 0 && <td style={{ padding: "4px 6px", color: T.text, fontFamily: "monospace", fontSize: 10, textAlign: "right" }}>{poidsDisplay}</td>}
+                      <td style={{ padding: "4px 6px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          {history.map((h, i) => {
+                            const fromColor = destinations.find(d => d.name === h.from)?.color ?? T.textDim;
+                            const toColor   = destinations.find(d => d.name === h.to)?.color   ?? T.textDim;
+                            return (
+                              <span key={i} style={{ fontSize: 10, color: T.textDim }}>
+                                <span style={{ color: fromColor, fontWeight: 600 }}>{h.from}</span>
+                                <span style={{ opacity: 0.5 }}> → </span>
+                                <span style={{ color: toColor, fontWeight: 600 }}>{h.to}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </td>
+                      <td style={{ padding: "4px 0 4px 6px" }}>
+                        <span style={{ color: currentColor, fontWeight: 700, background: `${currentColor}22`, padding: "1px 6px", borderRadius: 4 }}>{current}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table></> }
+          </div>
+        )}
+
+        {destStatsMap.size === 0 && pointedRows.size === 0 && reassignedRows.size === 0 && (
           <EmptyState icon="📋" text="Aucune donnée de rapport" sub="Pointez des lignes ou affectez des destinations dans l'onglet Pointage" />
         )}
 
