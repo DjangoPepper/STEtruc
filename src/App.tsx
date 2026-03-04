@@ -828,6 +828,60 @@ function ImportPage() {
               </div>
             )}
 
+            {/* ── Lignes atypiques ── */}
+            {(() => {
+              const atypical = editableRows
+                .map((row, ri) => ({ row, ri }))
+                .filter(({ row }) => anomalyInfo.isAnomalous(row));
+              if (atypical.length === 0) return null;
+              return (
+                <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, border: `1px solid ${T.warning}55`, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 14px", background: T.bgDark, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                    <span style={{ color: T.warning, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
+                      ⚠ Lignes atypiques ({atypical.length})
+                    </span>
+                    <button
+                      onClick={() => setEditableRows((prev) => prev.filter((row) => !anomalyInfo.isAnomalous(row)))}
+                      style={{
+                        background: `${T.error}22`, border: `1px solid ${T.error}55`,
+                        borderRadius: 6, color: T.error, fontSize: 10, fontWeight: 700,
+                        cursor: "pointer", padding: "3px 8px", whiteSpace: "nowrap",
+                      }}
+                    >✕ Supprimer tout</button>
+                  </div>
+                  <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                    {atypical.map(({ row, ri }) => (
+                      <div key={ri} style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        padding: "7px 14px", borderBottom: `1px solid ${T.border}22`,
+                        background: "#7C150811",
+                      }}>
+                        <span style={{ color: T.warning, fontSize: 12, flexShrink: 0 }}>⚠</span>
+                        <div style={{ flex: 1, display: "flex", gap: 8, flexWrap: "wrap", overflow: "hidden" }}>
+                          {visibleCols.slice(0, 6).map(({ h }) => {
+                            const v = row[h] ?? "";
+                            return v.trim() !== "" ? (
+                              <span key={h} style={{ color: T.textMuted, fontSize: 11, fontFamily: "monospace", whiteSpace: "nowrap" }}>
+                                <span style={{ color: T.textDim, fontSize: 9 }}>{h}: </span>{v}
+                              </span>
+                            ) : null;
+                          })}
+                          {visibleCols.length > 6 && (
+                            <span style={{ color: T.textDim, fontSize: 10 }}>+{visibleCols.length - 6} col.</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setEditableRows((prev) => prev.filter((_, idx) => idx !== ri))}
+                          style={{ background: "none", border: "none", color: T.error, cursor: "pointer", fontSize: 16, padding: 0, flexShrink: 0 }}
+                          title="Supprimer cette ligne"
+                        >✕</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Headers editor */}
             <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
               <div style={{
