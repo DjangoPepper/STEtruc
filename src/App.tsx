@@ -2894,7 +2894,19 @@ function RapportPage() {
 
   return (
     <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
-      <PageHeader title="Rapport" subtitle="Synthèse pointage & mouvements" />
+      <div style={{ position: "relative" }}>
+        <PageHeader title="Rapport" subtitle="Synthèse pointage & mouvements" />
+        <button
+          onClick={() => {
+            setTallyPrev({});
+            setChargementMaxi({});
+            setDechargementMaxi({});
+            ["ste_tallyPrev", "ste_chargementMaxi", "ste_dechargementMaxi"].forEach(k => { try { localStorage.removeItem(k); } catch {} });
+          }}
+          title="Effacer toutes les valeurs saisies manuellement"
+          style={{ position: "absolute", top: 14, right: 12, background: `${T.error}22`, border: `1px solid ${T.error}55`, borderRadius: 8, color: T.error, fontSize: 16, padding: "4px 10px", cursor: "pointer", lineHeight: 1 }}
+        >🗑</button>
+      </div>
 
       <div style={{ padding: "12px 12px 0" }}>
 
