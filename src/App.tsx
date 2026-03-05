@@ -2818,9 +2818,18 @@ function RapportPage() {
   const [openTally, setOpenTally] = useState(false);
   const [openPointees, setOpenPointees] = useState(true);
   const [openReaff, setOpenReaff] = useState(true);
-  const [tallyPrev, setTallyPrev] = useState<Record<string, { qty: string; weight: string }>>({});
-  const [chargementMaxi, setChargementMaxi] = useState<Record<string, { qty: string; weight: string }>>({});  
-  const [dechargementMaxi, setDechargementMaxi] = useState<Record<string, { qty: string; weight: string }>>({}); 
+
+  function rLs<T>(key: string, fb: T): T { try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) as T : fb; } catch { return fb; } }
+  function wLs(key: string, v: unknown) { try { localStorage.setItem(key, JSON.stringify(v)); } catch {} }
+
+  const [tallyPrev, setTallyPrevRaw] = useState<Record<string, { qty: string; weight: string }>>(() => rLs("ste_tallyPrev", {}));
+  const setTallyPrev: typeof setTallyPrevRaw = (v) => { setTallyPrevRaw(prev => { const next = typeof v === "function" ? v(prev) : v; wLs("ste_tallyPrev", next); return next; }); };
+
+  const [chargementMaxi, setChargementMaxiRaw] = useState<Record<string, { qty: string; weight: string }>>(() => rLs("ste_chargementMaxi", {}));
+  const setChargementMaxi: typeof setChargementMaxiRaw = (v) => { setChargementMaxiRaw(prev => { const next = typeof v === "function" ? v(prev) : v; wLs("ste_chargementMaxi", next); return next; }); };
+
+  const [dechargementMaxi, setDechargementMaxiRaw] = useState<Record<string, { qty: string; weight: string }>>(() => rLs("ste_dechargementMaxi", {}));
+  const setDechargementMaxi: typeof setDechargementMaxiRaw = (v) => { setDechargementMaxiRaw(prev => { const next = typeof v === "function" ? v(prev) : v; wLs("ste_dechargementMaxi", next); return next; }); };
 
   if (!parsed) {
     return (
