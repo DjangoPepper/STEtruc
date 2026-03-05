@@ -1624,6 +1624,7 @@ function TablePage() {
   const [newDestName, setNewDestName] = useState("");
   const [confirmClearDest, setConfirmClearDest] = useState(false);
   const [confirmReassign, setConfirmReassign] = useState<{ ri: number; from: string; to: string } | null>(null);
+  const [confirmUnpoint, setConfirmUnpoint] = useState<{ ri: number; ref: string } | null>(null);
   const [doubleVerif, setDoubleVerif] = useState(false);
   const [doubleVerifModal, setDoubleVerifModal] = useState<{ ri: number; ref: string; correct: number; choices: number[]; error: boolean; pendingDest?: string } | null>(null);
 
@@ -2466,6 +2467,32 @@ function TablePage() {
       {/* Add row modal */}
       {showAddRow && <AddRowModal onClose={() => setShowAddRow(false)} />}
 
+      {confirmUnpoint && (
+        <div
+          onClick={() => setConfirmUnpoint(null)}
+          style={{ position: "fixed", inset: 0, background: "#000000aa", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: T.bgCard, border: `1px solid ${T.error}66`, borderRadius: 14, padding: "22px 20px", maxWidth: 300, width: "90%", boxShadow: "0 20px 60px #00000099" }}
+          >
+            <div style={{ color: T.error, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>❌ Dépointer la ligne ?</div>
+            <div style={{ color: T.textMuted, fontSize: 12, marginBottom: 18 }}>
+              Retirer le pointage de <strong style={{ color: T.accent, fontFamily: "monospace" }}>{confirmUnpoint.ref}</strong> ?<br />
+              <span style={{ color: T.textDim, fontSize: 11 }}>Cette action est réversible.</span>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="ste-btn" style={{ flex: 1 }} onClick={() => setConfirmUnpoint(null)}>Annuler</button>
+              <button className="ste-btn danger" style={{ flex: 1 }} onClick={() => {
+                setPointedRows(prev => { const next = new Set(prev); next.delete(confirmUnpoint!.ri); return next; });
+                setConfirmUnpoint(null);
+                setModalRow(null);
+              }}>Dépointer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmReassign && (
         <div
           onClick={() => setConfirmReassign(null)}
@@ -2517,6 +2544,10 @@ function TablePage() {
         });
         const handlePointerClick = () => {
           if (isEmptyRow) return;
+          if (isPointed) {
+            setConfirmUnpoint({ ri, ref: refVal });
+            return;
+          }
           togglePointed();
         };
         const setOverride = (ci: number, val: string) => setRowOverrides((prev) => {
