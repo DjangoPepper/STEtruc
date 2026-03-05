@@ -197,20 +197,28 @@ function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [dimRepeated, setDimRepeated] = useState(true);
   const [exportFileName, setExportFileName] = useState("données_nettoyées");
-  const [splitFormats, setSplitFormats] = useState<Record<string, string>>({});
-  const [autoRefFmt, setAutoRefFmt] = useState(false);
-  const [poidsUnit, setPoidsUnit] = useState<"t" | "kg">("t");
-  const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string; dch: string }>({ rang: "", reference: "", poids: "", dch: "" });
-  const [extras, setExtras] = useState<{ col: string; label: string }[]>([]);
+
+  // ── Helpers localStorage ──────────────────────────────────────────────────
+  function lsGet<T>(key: string, fallback: T): T {
+    try { const v = localStorage.getItem(key); return v !== null ? (JSON.parse(v) as T) : fallback; } catch { return fallback; }
+  }
+  function lsSet(key: string, val: unknown) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+
+  const [splitFormats, setSplitFormats] = useState<Record<string, string>>(() => lsGet("ste_splitFormats", {}));
+  const [autoRefFmt, setAutoRefFmt] = useState<boolean>(() => lsGet("ste_autoRefFmt", false));
+  const [poidsUnit, setPoidsUnit] = useState<"t" | "kg">(() => lsGet("ste_poidsUnit", "t"));
+  const [mapping, setMapping] = useState<{ rang: string; reference: string; poids: string; dch: string }>(() => lsGet("ste_mapping", { rang: "", reference: "", poids: "", dch: "" }));
+  const [extras, setExtras] = useState<{ col: string; label: string }[]>(() => lsGet("ste_extras", []));
   const [pointedRows, setPointedRows] = useState<Set<number>>(new Set());
   const [rowOverrides, setRowOverrides] = useState<Map<number, Record<number, CellValue>>>(new Map());
-  const [destinations, setDestinations] = useState<Destination[]>([
+  const defaultDestinations: Destination[] = [
     { name: "H1", color: "#00c87a" },
     { name: "H2", color: "#f447d1" },
     { name: "H3", color: "#3cbefc" },
     { name: "H4", color: "#ff9b2c" },
     { name: "HNE", color: "#94A3B8", excludeFromReport: true },
-  ]);
+  ];
+  const [destinations, setDestinations] = useState<Destination[]>(() => lsGet("ste_destinations", defaultDestinations));
   const [selectedDest, setSelectedDest] = useState<string>("");
   const [rowDestinations, setRowDestinations] = useState<Map<number, string>>(new Map());
   const [reassignedRows, setReassignedRows] = useState<Map<number, { from: string; to: string }[]>>(new Map());
@@ -223,6 +231,14 @@ function AppProvider({ children }: { children: React.ReactNode }) {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   }, []);
+
+  // ── Persistance localStorage des préférences utilisateur ──────────────────
+  useEffect(() => { lsSet("ste_splitFormats", splitFormats); }, [splitFormats]);
+  useEffect(() => { lsSet("ste_autoRefFmt", autoRefFmt); }, [autoRefFmt]);
+  useEffect(() => { lsSet("ste_poidsUnit", poidsUnit); }, [poidsUnit]);
+  useEffect(() => { lsSet("ste_mapping", mapping); }, [mapping]);
+  useEffect(() => { lsSet("ste_extras", extras); }, [extras]);
+  useEffect(() => { lsSet("ste_destinations", destinations); }, [destinations]);
 
   // loadSheet : sauvegarde l'onglet courant AVANT de charger le nouveau
   const loadSheet = useCallback((wb: XLSX.WorkBook, sheetName: string) => {
@@ -1752,13 +1768,15 @@ function TablePage() {
   }, [rowDestinations, allRows, poidsColIdx, poidsUnit]);
 
   // Largeur des colonnes — compression proportionnelle pour éviter le scroll
+  const numColW = Math.max(28, String(allRows.length).length * 8 + 14);
+
   const colWidths = useMemo(() => {
     const CH_DATA = 9.5;   // px/char police 18px
     const CH_HDR  = 8;    // px/char police 14px uppercase
     const MIN_W   = 38;
     const MAX_W   = 200;
     const PAD     = 20;    // padding interne
-    const NUM_W   = 38;    // colonne #
+    const NUM_W   = numColW;    // colonne # — dynamique selon nb de lignes
     const VIEWPORT = 380; // largeur cible mobile
     const sample = sortedRows.slice(0, 80);
     const ideals = new Map<number, number>();
@@ -1789,7 +1807,7 @@ function TablePage() {
       });
     }
     return widths;
-  }, [sortedRows, visibleCols, headers, mapping, extras, poidsUnit]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sortedRows, visibleCols, headers, mapping, extras, poidsUnit, numColW]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Détection des lignes atypiques (visuel uniquement)
   const anomalyRowSet = useMemo(() => {
@@ -1856,11 +1874,11 @@ function TablePage() {
     }
     .pt-table thead th .th-filter input:focus { border-color: ${T.accent}55; }
     .pt-table th.th-num-h { background: #0E1826; border-right: 1px solid ${T.border};
-      width: 36px; min-width: 36px; text-align: center; position: sticky; top: 0;
+      width: ${numColW}px; min-width: ${numColW}px; text-align: center; position: sticky; top: 0;
       z-index: 3; vertical-align: top; padding: 0; }
     .pt-table td.td-num {
       background: #0E1826; border-right: 1px solid #7C3AED88;
-      width: 36px; min-width: 36px; text-align: center;
+      width: ${numColW}px; min-width: ${numColW}px; text-align: center;
       color: ${T.textDim}; font-size: 10px; padding: 7px 4px;
       white-space: nowrap; user-select: none;
     }
@@ -2939,14 +2957,16 @@ function RapportPage() {
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
+                    <tr style={{ borderBottom: `1px solid ${T.border}44` }}>
+                      <th style={{ ...thStyle("left"), padding: "3px 6px 0 0" }} rowSpan={2}>Dest.</th>
+                      <th colSpan={2} style={{ ...thStyle(), color: "#60A5FA", borderBottom: `1px solid #60A5FA44`, paddingBottom: 2 }}>TODAY</th>
+                      <th colSpan={2} style={{ ...thStyle(), color: "#FB923C", borderBottom: `1px solid #FB923C44`, paddingBottom: 2 }}>PREV.</th>
+                      <th colSpan={2} style={{ ...thStyle(), color: "#34D399", borderBottom: `1px solid #34D39944`, paddingBottom: 2 }}>TOTAL</th>
+                    </tr>
                     <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                      <th style={{ ...thStyle("left"), padding: "3px 6px 0 0" }}>Dest.</th>
-                      <th style={thStyle()}>TODAY Qté</th>
-                      <th style={thStyle()}>TODAY Poids</th>
-                      <th style={{ ...thStyle(), color: "#FB923C" }}>PREV. Qté</th>
-                      <th style={{ ...thStyle(), color: "#FB923C" }}>PREV. Poids</th>
-                      <th style={{ ...thStyle(), color: "#34D399" }}>TOTAL Qté</th>
-                      <th style={{ ...thStyle(), color: "#34D399" }}>TOTAL Poids</th>
+                      <th style={thStyle()}>Qté</th><th style={thStyle()}>Poids</th>
+                      <th style={{ ...thStyle(), color: "#FB923C" }}>Qté</th><th style={{ ...thStyle(), color: "#FB923C" }}>Poids</th>
+                      <th style={{ ...thStyle(), color: "#34D399" }}>Qté</th><th style={{ ...thStyle(), color: "#34D399" }}>Poids</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3041,15 +3061,17 @@ function RapportPage() {
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
+                    <tr style={{ borderBottom: `1px solid ${T.border}44` }}>
+                      <th style={{ ...thS("left"), padding: "3px 6px 0 0" }} rowSpan={2}>Destination</th>
+                      <th colSpan={2} style={{ ...thS(), color: "#60A5FA", borderBottom: `1px solid #60A5FA44`, paddingBottom: 2 }}>TOTAL</th>
+                      <th colSpan={2} style={{ ...thS(), color: "#FB923C", opacity: 0.6, borderBottom: `1px solid #FB923C44`, paddingBottom: 2 }}>MAXI</th>
+                      <th colSpan={2} style={{ ...thS(), color: "#34D399", borderBottom: `1px solid #34D39944`, paddingBottom: 2 }}>ESTIM.</th>
+                      <th style={{ ...thS(), color: "#A78BFA", fontSize: 9 }} rowSpan={2}>Moy.</th>
+                    </tr>
                     <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                      <th style={{ ...thS("left"), padding: "3px 6px 0 0" }}>Destination</th>
-                      <th style={thS()}>TOTAL Qté</th>
-                      <th style={thS()}>TOTAL Poids</th>
-                      <th style={{ ...thS(), color: "#FB923C", opacity: 0.5 }}>MAXI Qté</th>
-                      <th style={{ ...thS(), color: "#FB923C", opacity: 0.5 }}>MAXI Poids</th>
-                      <th style={{ ...thS(), color: "#34D399" }}>ESTIM. Qté</th>
-                      <th style={{ ...thS(), color: "#34D399" }}>ESTIM. Poids</th>
-                      <th style={{ ...thS(), color: "#A78BFA", fontSize: 9 }}>Poids moy.</th>
+                      <th style={thS()}>Qté</th><th style={thS()}>Poids</th>
+                      <th style={{ ...thS(), color: "#FB923C", opacity: 0.6 }}>Qté</th><th style={{ ...thS(), color: "#FB923C", opacity: 0.6 }}>Poids</th>
+                      <th style={{ ...thS(), color: "#34D399" }}>Qté</th><th style={{ ...thS(), color: "#34D399" }}>Poids</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3138,15 +3160,17 @@ function RapportPage() {
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
+                    <tr style={{ borderBottom: `1px solid ${T.border}44` }}>
+                      <th style={{ ...thS("left"), padding: "3px 6px 0 0" }} rowSpan={2}>Destination</th>
+                      <th colSpan={2} style={{ ...thS(), color: "#60A5FA", borderBottom: `1px solid #60A5FA44`, paddingBottom: 2 }}>DÉCHARGÉ</th>
+                      <th colSpan={2} style={{ ...thS(), color: "#FB923C", borderBottom: `1px solid #FB923C44`, paddingBottom: 2 }}>TOTAL</th>
+                      <th colSpan={2} style={{ ...thS(), color: "#34D399", borderBottom: `1px solid #34D39944`, paddingBottom: 2 }}>RESTANT</th>
+                      <th style={{ ...thS(), color: "#A78BFA", fontSize: 9 }} rowSpan={2}>Moy.</th>
+                    </tr>
                     <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                      <th style={{ ...thS("left"), padding: "3px 6px 0 0" }}>Destination</th>
-                      <th style={thS()}>DÉCHARGÉ Qté</th>
-                      <th style={thS()}>DÉCHARGÉ Poids</th>
-                      <th style={{ ...thS(), color: "#FB923C" }}>TOTAL Qté</th>
-                      <th style={{ ...thS(), color: "#FB923C" }}>TOTAL Poids</th>
-                      <th style={{ ...thS(), color: "#34D399" }}>RESTANT Qté</th>
-                      <th style={{ ...thS(), color: "#34D399" }}>RESTANT Poids</th>
-                      <th style={{ ...thS(), color: "#A78BFA", fontSize: 9 }}>Poids moy.</th>
+                      <th style={thS()}>Qté</th><th style={thS()}>Poids</th>
+                      <th style={{ ...thS(), color: "#FB923C" }}>Qté</th><th style={{ ...thS(), color: "#FB923C" }}>Poids</th>
+                      <th style={{ ...thS(), color: "#34D399" }}>Qté</th><th style={{ ...thS(), color: "#34D399" }}>Poids</th>
                     </tr>
                   </thead>
                   <tbody>
