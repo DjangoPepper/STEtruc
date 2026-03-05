@@ -695,6 +695,13 @@ function applyGrouping(value: string, pattern: string): string {
   return result;
 }
 
+// Helper: thousands separator (right-to-left groups of 3, preserves decimals)
+function thsep(val: string): string {
+  const [int, dec] = val.split(".");
+  const separated = int.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return dec !== undefined ? separated + "." + dec : separated;
+}
+
 // Helper: auto-format reference (groupement intelligent selon longueur/contenu)
 function autoFormatRef(val: string, globalFmt: string): string {
   const str = val.trim();
@@ -1466,8 +1473,8 @@ function ImportPage() {
                             {mapping.poids ? (() => {
                               const raw = parseFloat(row[mapping.poids] ?? "") || 0;
                               const val = poidsUnit === "kg" ? (raw * 1000).toFixed(0) : parseFloat(raw.toFixed(3)).toString();
-                              const poidsFmt = splitFormats["poids"] ?? (poidsUnit === "kg" ? "2 3 3" : "2");
-                              return applyGrouping(val + (poidsUnit === "kg" ? "kg" : "t"), poidsFmt);
+                              const poidsFmt = splitFormats["poids"] ?? "";
+                              return (poidsFmt ? applyGrouping(val, poidsFmt) : thsep(val)) + " " + (poidsUnit === "kg" ? "kg" : "t");
                             })() : "—"}
                           </td>
                           <td style={{ color: T.accent, padding: "4px 6px", fontFamily: "monospace", fontSize: 11 }}>
@@ -1618,8 +1625,7 @@ function TablePage() {
   const [confirmClearDest, setConfirmClearDest] = useState(false);
   const [confirmReassign, setConfirmReassign] = useState<{ ri: number; from: string; to: string } | null>(null);
   const [doubleVerif, setDoubleVerif] = useState(false);
-  const [doubleVerifModal, setDoubleVerifModal] = useState<{ ri: number; ref: string; correct: number; choices: number[]; error: boolean } | null>(null);
-  const [confirmUnpoint, setConfirmUnpoint] = useState<{ ri: number; ref: string } | null>(null);
+  const [doubleVerifModal, setDoubleVerifModal] = useState<{ ri: number; ref: string; correct: number; choices: number[]; error: boolean; pendingDest?: string } | null>(null);
 
   if (!parsed) {
     return (
@@ -2145,10 +2151,10 @@ function TablePage() {
               <tbody>
                 {destinations.filter(d => destStats.has(d.name)).map(d => {
                   const s = destStats.get(d.name)!;
-                  const poidsFmt = splitFormats["poids"] ?? (poidsUnit === "kg" ? "2 3 3" : "2");
+                  const poidsFmt = splitFormats["poids"] ?? "";
                   const fmtWeight = (w: number) => {
                     const val = poidsUnit === "kg" ? (w * 1000).toFixed(0) : parseFloat(w.toFixed(3)).toString();
-                    return applyGrouping(val, poidsFmt);
+                    return poidsFmt ? applyGrouping(val, poidsFmt) : thsep(val);
                   };
                   return (
                     <tr key={d.name}>
@@ -2165,11 +2171,11 @@ function TablePage() {
                   );
                 })}
                 {destStats.size > 1 && (() => {
-                  const poidsFmt = splitFormats["poids"] ?? (poidsUnit === "kg" ? "2 3 3" : "2");
+                  const poidsFmt = splitFormats["poids"] ?? "";
                   const totalW = [...destStats.values()].reduce((a, b) => a + b.weight, 0);
                   const fmtTotal = () => {
                     const val = poidsUnit === "kg" ? (totalW * 1000).toFixed(0) : parseFloat(totalW.toFixed(3)).toString();
-                    return applyGrouping(val, poidsFmt);
+                    return poidsFmt ? applyGrouping(val, poidsFmt) : thsep(val);
                   };
                   return (
                   <tr style={{ borderTop: `1px solid ${T.border}` }}>
@@ -2339,6 +2345,30 @@ function TablePage() {
                         if (existing && existing !== selectedDest) {
                           setConfirmReassign({ ri, from: existing, to: selectedDest });
                         } else {
+                          if (doubleVerif) {
+                            const poidsIdx2 = mapping.poids ? headers.indexOf(mapping.poids) : -1;
+                            const refIdx2   = mapping.reference ? headers.indexOf(mapping.reference) : -1;
+                            const getCell2  = (ci: number) => rowOverrides.get(ri)?.[ci] !== undefined ? String(rowOverrides.get(ri)![ci] ?? "") : String(row[ci] ?? "");
+                            const refVal2   = refIdx2 >= 0 ? getCell2(refIdx2) : "—";
+                            const poidsVal2 = poidsIdx2 >= 0 ? getCell2(poidsIdx2) : null;
+                            if (poidsIdx2 >= 0 && poidsVal2) {
+                              const realW = parseFloat(String(poidsVal2).replace(",", "."));
+                              if (!isNaN(realW) && realW > 0) {
+                                const genFake = (): number => {
+                                  const pct = 0.02 + Math.random() * 0.07;
+                                  const sign = Math.random() > 0.5 ? 1 : -1;
+                                  return parseFloat((realW * (1 + sign * pct)).toFixed(realW < 10 ? 3 : 1));
+                                };
+                                let f1 = genFake(), f2 = genFake(), guard = 0;
+                                while (guard++ < 20 && Math.abs(f1 - realW) < realW * 0.005) f1 = genFake();
+                                guard = 0;
+                                while (guard++ < 20 && (Math.abs(f2 - realW) < realW * 0.005 || Math.abs(f2 - f1) < realW * 0.005)) f2 = genFake();
+                                const choices = [realW, f1, f2].sort(() => Math.random() - 0.5);
+                                setDoubleVerifModal({ ri, ref: refVal2, correct: realW, choices, error: false, pendingDest: selectedDest });
+                                return;
+                              }
+                            }
+                          }
                           setRowDestinations((prev) => {
                             const next = new Map(prev);
                             if (next.get(ri) === selectedDest) next.delete(ri);
@@ -2349,7 +2379,9 @@ function TablePage() {
                       }
                       return;
                     }
-                    if (selectMode === "none") setModalRow({ row, rowNum: ri + 1, ri });
+                    if (selectMode === "none") {
+                      setModalRow({ row, rowNum: ri + 1, ri });
+                    }
                   }}
                 >
                   <td className="td-num" title={isPointed ? "Pointé ✅" : isAdded ? "Ligne ajoutée" : undefined}>
@@ -2369,7 +2401,7 @@ function TablePage() {
                     } else if (ci === poidsColIdx) {
                       const raw = parseFloat(strVal) || 0;
                       const val = poidsUnit === "kg" ? (raw * 1000).toFixed(0) : parseFloat(raw.toFixed(3)).toString();
-                      display = applyGrouping(val + (poidsUnit === "kg" ? " kg" : " t"), fmt);
+                      display = (fmt ? applyGrouping(val, fmt) : thsep(val)) + " " + (poidsUnit === "kg" ? "kg" : "t");
                     } else if (ci === refColIdx && autoRefFmt) {
                       display = autoFormatRef(strVal, fmt);
                     } else {
@@ -2434,32 +2466,6 @@ function TablePage() {
       {/* Add row modal */}
       {showAddRow && <AddRowModal onClose={() => setShowAddRow(false)} />}
 
-      {/* Confirmation réaffectation */}
-      {confirmUnpoint && (
-        <div
-          onClick={() => setConfirmUnpoint(null)}
-          style={{ position: "fixed", inset: 0, background: "#000000aa", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center" }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: T.bgCard, border: `1px solid ${T.error}66`, borderRadius: 14, padding: "22px 20px", maxWidth: 300, width: "90%", boxShadow: "0 20px 60px #00000099" }}
-          >
-            <div style={{ color: T.error, fontWeight: 800, fontSize: 14, marginBottom: 10 }}>❌ Dépointer la ligne ?</div>
-            <div style={{ color: T.textMuted, fontSize: 12, marginBottom: 18 }}>
-              Retirer le pointage de <strong style={{ color: T.accent, fontFamily: "monospace" }}>{confirmUnpoint.ref}</strong> ?<br />
-              <span style={{ color: T.textDim, fontSize: 11 }}>Cette action est réversible.</span>
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="ste-btn" style={{ flex: 1 }} onClick={() => setConfirmUnpoint(null)}>Annuler</button>
-              <button className="ste-btn danger" style={{ flex: 1 }} onClick={() => {
-                setPointedRows(prev => { const next = new Set(prev); next.delete(confirmUnpoint!.ri); return next; });
-                setConfirmUnpoint(null);
-              }}>Dépointer</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {confirmReassign && (
         <div
           onClick={() => setConfirmReassign(null)}
@@ -2511,30 +2517,6 @@ function TablePage() {
         });
         const handlePointerClick = () => {
           if (isEmptyRow) return;
-          if (isPointed) {
-            setConfirmUnpoint({ ri, ref: refVal });
-            return;
-          }
-          if (doubleVerif && poidsIdx >= 0 && poidsVal) {
-            const realW = parseFloat(String(poidsVal).replace(",", "."));
-            if (!isNaN(realW) && realW > 0) {
-              const genFake = (): number => {
-                const pct = 0.02 + Math.random() * 0.07;
-                const sign = Math.random() > 0.5 ? 1 : -1;
-                return parseFloat((realW * (1 + sign * pct)).toFixed(realW < 10 ? 3 : 1));
-              };
-              let f1 = genFake();
-              let f2 = genFake();
-              let guard = 0;
-              while (guard++ < 20 && Math.abs(f1 - realW) < realW * 0.005) f1 = genFake();
-              guard = 0;
-              while (guard++ < 20 && (Math.abs(f2 - realW) < realW * 0.005 || Math.abs(f2 - f1) < realW * 0.005)) f2 = genFake();
-              const choices = [realW, f1, f2].sort(() => Math.random() - 0.5);
-              setModalRow(null);
-              setDoubleVerifModal({ ri, ref: refVal, correct: realW, choices, error: false });
-              return;
-            }
-          }
           togglePointed();
         };
         const setOverride = (ci: number, val: string) => setRowOverrides((prev) => {
@@ -2649,17 +2631,21 @@ function TablePage() {
       {/* Double Vérif modal */}
       {doubleVerifModal && (() => {
         const { ref, correct, choices, error } = doubleVerifModal;
-        const poidsFmt = splitFormats["poids"] ?? (poidsUnit === "kg" ? "2 3 3" : "2");
+        const poidsFmt = splitFormats["poids"] ?? "";
         const unitLabel = poidsUnit === "kg" ? "kg" : "t";
         const fmtChoice = (w: number) => {
           const val = poidsUnit === "kg" ? (w * 1000).toFixed(0) : parseFloat(w.toFixed(3)).toString();
-          return applyGrouping(val, poidsFmt) + " " + unitLabel;
+          return (poidsFmt ? applyGrouping(val, poidsFmt) : thsep(val)) + " " + unitLabel;
         };
         const handleChoice = (w: number) => {
           if (error) return;
           const isCorrect = Math.abs(w - correct) < 1e-9;
           if (isCorrect) {
-            setPointedRows(prev => { const next = new Set(prev); next.add(doubleVerifModal!.ri); return next; });
+            if (doubleVerifModal!.pendingDest) {
+              setRowDestinations(prev => { const next = new Map(prev); next.set(doubleVerifModal!.ri, doubleVerifModal!.pendingDest!); return next; });
+            } else {
+              setPointedRows(prev => { const next = new Set(prev); next.add(doubleVerifModal!.ri); return next; });
+            }
             setDoubleVerifModal(null);
           } else {
             setDoubleVerifModal(prev => prev ? { ...prev, error: true } : null);
@@ -2745,7 +2731,9 @@ function RapportPage() {
   const [openTally, setOpenTally] = useState(true);
   const [openPointees, setOpenPointees] = useState(true);
   const [openReaff, setOpenReaff] = useState(true);
-  const [tallyPrev, setTallyPrev] = useState<Record<string, { qty: string; weight: string }>>({}); 
+  const [tallyPrev, setTallyPrev] = useState<Record<string, { qty: string; weight: string }>>({});
+  const [chargementMaxi, setChargementMaxi] = useState<Record<string, { qty: string; weight: string }>>({});  
+  const [dechargementMaxi, setDechargementMaxi] = useState<Record<string, { qty: string; weight: string }>>({}); 
 
   if (!parsed) {
     return (
@@ -2759,12 +2747,12 @@ function RapportPage() {
   const poidsIdx    = mapping.poids ? headers.indexOf(mapping.poids) : -1;
   const refIdx      = mapping.reference ? headers.indexOf(mapping.reference) : -1;
   const rangIdx     = mapping.rang ? headers.indexOf(mapping.rang) : -1;
-  const poidsFmt    = splitFormats["poids"] ?? (poidsUnit === "kg" ? "2 3 3" : "2");
+  const poidsFmt    = splitFormats["poids"] ?? "";
   const unitLabel   = poidsUnit === "kg" ? "kg" : "t";
 
   const fmtWeight = (w: number): string => {
     const val = poidsUnit === "kg" ? (w * 1000).toFixed(0) : parseFloat(w.toFixed(3)).toString();
-    return applyGrouping(val, poidsFmt) + " " + unitLabel;
+    return (poidsFmt ? applyGrouping(val, poidsFmt) : thsep(val)) + " " + unitLabel;
   };
 
   const visibleRows = allRows.map((row, ri) => ({ row, ri })).filter(({ ri }) => !hiddenRows.has(ri));
@@ -2827,6 +2815,7 @@ function RapportPage() {
               ...(poidsIdx >= 0 ? [
                 { label: `Poids total`,     val: fmtWeight(totalWeight),  color: T.warning },
                 { label: `Poids affecté`,   val: fmtWeight(affectedWeight), color: "#A78BFA" },
+                { label: `Poids moyen`,     val: totalRows > 0 && totalWeight > 0 ? (poidsUnit === "kg" ? fmtWeight(totalWeight / totalRows) : thsep(Math.round(totalWeight / totalRows).toString()) + " t") : "—", color: "#F9A8D4" },
               ] : []),
             ].map(({ label, val, color }) => (
               <div key={label} style={{ background: T.bgDark, borderRadius: 8, padding: "8px 10px" }}>
@@ -2883,17 +2872,202 @@ function RapportPage() {
         {/* Chargement */}
         <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid #2563EB55`, padding: "12px 14px", marginBottom: 12 }}>
           <SectionHeader label="🚢 Chargement" open={openChargement} toggle={() => setOpenChargement(o => !o)} color="#60A5FA" />
-          {openChargement && (
-            <div style={{ color: T.textDim, fontSize: 11, fontStyle: "italic" }}>Aucune donnée pour le moment.</div>
-          )}
+          {openChargement && (() => {
+            const dests = destinations.length > 0 ? destinations : [];
+            const setMaxi = (name: string, field: "qty" | "weight", val: string) =>
+              setChargementMaxi(p => ({ ...p, [name]: { qty: p[name]?.qty ?? "", weight: p[name]?.weight ?? "", [field]: val } }));
+            const thS = (align: "left" | "right" | "center" = "right"): React.CSSProperties => ({
+              textAlign: align, color: T.textDim, padding: "3px 5px 5px", fontWeight: 600, fontSize: 10, whiteSpace: "nowrap"
+            });
+            const tdS = (color: string = T.text): React.CSSProperties => ({
+              textAlign: "right", padding: "4px 5px", fontFamily: "monospace", fontSize: 10, color
+            });
+            const inputS: React.CSSProperties = {
+              width: 62, textAlign: "right", background: T.bgDark,
+              border: `1px solid ${T.border2}`, borderRadius: 4,
+              color: "#FB923C", fontFamily: "monospace", fontSize: 10, padding: "2px 4px"
+            };
+            let sumTotQty = 0, sumTotW = 0, sumMaxiQty = 0, sumMaxiW = 0;
+            for (const d of dests) {
+              const s = destStatsMap.get(d.name);
+              sumTotQty  += s?.count ?? 0;
+              sumTotW    += s?.weight ?? 0;
+              sumMaxiQty += parseFloat(chargementMaxi[d.name]?.qty ?? "0") || 0;
+              sumMaxiW   += parseFloat(String(chargementMaxi[d.name]?.weight ?? "0").replace(",", ".")) || 0;
+            }
+            const sumEstW   = sumMaxiW - sumTotW;
+            const sumMoyW   = sumTotQty > 0 ? sumTotW / sumTotQty : NaN;
+            const sumEstQty = !isNaN(sumMoyW) && sumMoyW > 0 ? Math.floor(sumEstW / sumMoyW) : NaN;
+            return (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...thS("left"), padding: "3px 6px 0 0" }} rowSpan={2}>Destination</th>
+                      <th colSpan={2} style={{ textAlign: "center", color: "#60A5FA", fontSize: 10, fontWeight: 700, padding: "3px 4px 2px", borderBottom: `1px solid #60A5FA44` }}>TOTAL</th>
+                      <th colSpan={2} style={{ textAlign: "center", color: "#FB923C", fontSize: 10, fontWeight: 700, padding: "3px 4px 2px", borderBottom: `1px solid #FB923C44` }}>MAXI</th>
+                      <th colSpan={3} style={{ textAlign: "center", color: "#34D399", fontSize: 10, fontWeight: 700, padding: "3px 4px 2px", borderBottom: `1px solid #34D39944` }}>ESTIMATION</th>
+                    </tr>
+                    <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                      <th style={thS()}>Qté</th>
+                      <th style={thS()}>Poids</th>
+                      <th style={{ ...thS(), color: "#FB923C44" }}>Qté</th>
+                      <th style={{ ...thS(), color: "#FB923C" }}>Poids</th>
+                      <th style={{ ...thS(), color: "#34D399" }}>Qté</th>
+                      <th style={{ ...thS(), color: "#34D399" }}>Poids</th>
+                      <th style={{ ...thS(), color: "#A78BFA", fontSize: 9 }}>Poids moy.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dests.map(d => {
+                      const s = destStatsMap.get(d.name);
+                      const tQty = s?.count ?? 0;
+                      const tW   = s?.weight ?? 0;
+                      const mQty = parseFloat(chargementMaxi[d.name]?.qty ?? "0") || 0;
+                      const mW   = parseFloat(String(chargementMaxi[d.name]?.weight ?? "0").replace(",", ".")) || 0;
+                      const eW   = mW - tW;
+                      const moyW = tQty > 0 ? tW / tQty : NaN;
+                      const effectiveMoyW = !isNaN(moyW) && moyW > 0 ? moyW : sumMoyW;
+                      const eQty = !isNaN(effectiveMoyW) && effectiveMoyW > 0 ? Math.floor(eW / effectiveMoyW) : NaN;
+                      return (
+                        <tr key={d.name} style={{ borderBottom: `1px solid ${T.border2}22` }}>
+                          <td style={{ padding: "4px 6px 4px 0" }}>
+                            <span style={{ background: `${d.color}22`, borderLeft: `3px solid ${d.color}`, padding: "1px 6px", borderRadius: 3, color: d.color, fontWeight: 700, fontSize: 10 }}>{d.name}</span>
+                          </td>
+                          <td style={tdS("#60A5FA")}>{tQty || "—"}</td>
+                          <td style={tdS("#60A5FA")}>{tW > 0 ? fmtWeight(tW) : "—"}</td>
+                          <td style={{ padding: "3px 5px", textAlign: "right", color: T.textDim, opacity: 0.35, fontFamily: "monospace", fontSize: 11 }}>{mQty || "—"}</td>
+                          <td style={{ padding: "3px 5px", textAlign: "right" }}>
+                            <input type="text" inputMode="decimal" style={{ ...inputS, width: 72 }}
+                              value={(() => { const raw = chargementMaxi[d.name]?.weight ?? ""; const n = parseFloat(raw.replace(",", ".")); return isNaN(n) ? raw : thsep(String(n)); })()}
+                              onChange={e => setMaxi(d.name, "weight", e.target.value.replace(/\s/g, ""))}
+                              placeholder="0" />
+                          </td>
+                          <td style={tdS(eQty < 0 ? T.error : "#34D399")}>{mW > 0 ? (eQty < 0 ? `(${Math.abs(eQty)})` : eQty || "—") : "—"}</td>
+                          <td style={tdS(eW < 0 ? T.error : "#34D399")}>{mW > 0 ? (eW < 0 ? `(${fmtWeight(Math.abs(eW))})` : eW > 0 ? fmtWeight(eW) : "—") : "—"}</td>
+                          <td style={tdS("#A78BFA")}>{!isNaN(moyW) && moyW > 0 ? fmtWeight(moyW) : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: `1px solid ${T.border}` }}>
+                      <td style={{ padding: "5px 6px 4px 0", color: T.textDim, fontSize: 10, fontStyle: "italic" }}>Total</td>
+                      <td style={tdS("#60A5FA")}><strong>{sumTotQty || "—"}</strong></td>
+                      <td style={tdS("#60A5FA")}><strong>{sumTotW > 0 ? fmtWeight(sumTotW) : "—"}</strong></td>
+                      <td style={tdS("#FB923C44")}><strong style={{ opacity: 0.35 }}>{sumMaxiQty || "—"}</strong></td>
+                      <td style={tdS("#FB923C")}><strong>{sumMaxiW > 0 ? fmtWeight(sumMaxiW) : "—"}</strong></td>
+                      <td style={tdS(sumEstQty < 0 ? T.error : "#34D399")}><strong>{sumMaxiW > 0 ? (isNaN(sumEstQty) ? "—" : sumEstQty < 0 ? `(${Math.abs(sumEstQty)})` : sumEstQty || "—") : "—"}</strong></td>
+                      <td style={tdS(sumEstW < 0 ? T.error : "#34D399")}><strong>{sumMaxiW > 0 ? (sumEstW < 0 ? `(${fmtWeight(Math.abs(sumEstW))})` : sumEstW > 0 ? fmtWeight(sumEstW) : "—") : "—"}</strong></td>
+                      <td style={tdS("#A78BFA")}><strong>{sumTotQty > 0 && sumTotW > 0 ? fmtWeight(sumTotW / sumTotQty) : "—"}</strong></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Déchargement */}
         <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid #D9770655`, padding: "12px 14px", marginBottom: 12 }}>
           <SectionHeader label="⚓ Déchargement" open={openDechargement} toggle={() => setOpenDechargement(o => !o)} color="#FB923C" />
-          {openDechargement && (
-            <div style={{ color: T.textDim, fontSize: 11, fontStyle: "italic" }}>Aucune donnée pour le moment.</div>
-          )}
+          {openDechargement && (() => {
+            const dests = destinations.length > 0 ? destinations : [];
+            const setMaxi = (name: string, field: "qty" | "weight", val: string) =>
+              setDechargementMaxi(p => ({ ...p, [name]: { qty: p[name]?.qty ?? "", weight: p[name]?.weight ?? "", [field]: val } }));
+            const thS = (align: "left" | "right" | "center" = "right"): React.CSSProperties => ({
+              textAlign: align, color: T.textDim, padding: "3px 5px 5px", fontWeight: 600, fontSize: 10, whiteSpace: "nowrap"
+            });
+            const tdS = (color: string = T.text): React.CSSProperties => ({
+              textAlign: "right", padding: "4px 5px", fontFamily: "monospace", fontSize: 10, color
+            });
+            const inputS: React.CSSProperties = {
+              width: 62, textAlign: "right", background: T.bgDark,
+              border: `1px solid ${T.border2}`, borderRadius: 4,
+              color: "#FB923C", fontFamily: "monospace", fontSize: 10, padding: "2px 4px"
+            };
+            let sumTotQty = 0, sumTotW = 0, sumMaxiQty = 0, sumMaxiW = 0;
+            for (const d of dests) {
+              const s = destStatsMap.get(d.name);
+              sumTotQty  += s?.count ?? 0;
+              sumTotW    += s?.weight ?? 0;
+              sumMaxiQty += parseFloat(dechargementMaxi[d.name]?.qty ?? "0") || 0;
+              sumMaxiW   += parseFloat(String(dechargementMaxi[d.name]?.weight ?? "0").replace(",", ".")) || 0;
+            }
+            const sumEstW   = sumTotW - sumMaxiW;
+            const sumEstQty = sumTotQty - sumMaxiQty;
+            return (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...thS("left"), padding: "3px 6px 0 0" }} rowSpan={2}>Destination</th>
+                      <th colSpan={2} style={{ textAlign: "center", color: "#60A5FA", fontSize: 10, fontWeight: 700, padding: "3px 4px 2px", borderBottom: `1px solid #60A5FA44` }}>TOTAL</th>
+                      <th colSpan={2} style={{ textAlign: "center", color: "#FB923C", fontSize: 10, fontWeight: 700, padding: "3px 4px 2px", borderBottom: `1px solid #FB923C44` }}>CHARGÉ</th>
+                      <th colSpan={3} style={{ textAlign: "center", color: "#34D399", fontSize: 10, fontWeight: 700, padding: "3px 4px 2px", borderBottom: `1px solid #34D39944` }}>RESTANT</th>
+                    </tr>
+                    <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                      <th style={thS()}>Qté</th>
+                      <th style={thS()}>Poids</th>
+                      <th style={{ ...thS(), color: "#FB923C" }}>Qté</th>
+                      <th style={{ ...thS(), color: "#FB923C" }}>Poids</th>
+                      <th style={{ ...thS(), color: "#34D399" }}>Qté</th>
+                      <th style={{ ...thS(), color: "#34D399" }}>Poids</th>
+                      <th style={{ ...thS(), color: "#A78BFA", fontSize: 9 }}>Poids moy.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dests.map(d => {
+                      const s = destStatsMap.get(d.name);
+                      const tQty = s?.count ?? 0;
+                      const tW   = s?.weight ?? 0;
+                      const mQty = parseFloat(dechargementMaxi[d.name]?.qty ?? "0") || 0;
+                      const mW   = parseFloat(String(dechargementMaxi[d.name]?.weight ?? "0").replace(",", ".")) || 0;
+                      const eW   = tW - mW;
+                      const eQty = tQty - mQty;
+                      const moyW = tQty > 0 ? tW / tQty : NaN;
+                      return (
+                        <tr key={d.name} style={{ borderBottom: `1px solid ${T.border2}22` }}>
+                          <td style={{ padding: "4px 6px 4px 0" }}>
+                            <span style={{ background: `${d.color}22`, borderLeft: `3px solid ${d.color}`, padding: "1px 6px", borderRadius: 3, color: d.color, fontWeight: 700, fontSize: 10 }}>{d.name}</span>
+                          </td>
+                          <td style={tdS("#60A5FA")}>{tQty || "—"}</td>
+                          <td style={tdS("#60A5FA")}>{tW > 0 ? fmtWeight(tW) : "—"}</td>
+                          <td style={{ padding: "3px 5px", textAlign: "right" }}>
+                            <input type="number" min={0} style={inputS}
+                              value={dechargementMaxi[d.name]?.qty ?? ""}
+                              onChange={e => setMaxi(d.name, "qty", e.target.value)}
+                              placeholder="0" />
+                          </td>
+                          <td style={{ padding: "3px 5px", textAlign: "right" }}>
+                            <input type="text" inputMode="decimal" style={{ ...inputS, width: 72 }}
+                              value={(() => { const raw = dechargementMaxi[d.name]?.weight ?? ""; const n = parseFloat(raw.replace(",", ".")); return isNaN(n) ? raw : thsep(String(n)); })()}
+                              onChange={e => setMaxi(d.name, "weight", e.target.value.replace(/\s/g, ""))}
+                              placeholder="0" />
+                          </td>
+                          <td style={tdS(eQty < 0 ? T.error : "#34D399")}>{mQty > 0 || tQty > 0 ? (eQty < 0 ? `(${Math.abs(eQty)})` : eQty || "—") : "—"}</td>
+                          <td style={tdS(eW < 0 ? T.error : "#34D399")}>{mW > 0 || tW > 0 ? (eW < 0 ? `(${fmtWeight(Math.abs(eW))})` : eW > 0 ? fmtWeight(eW) : "—") : "—"}</td>
+                          <td style={tdS("#A78BFA")}>{!isNaN(moyW) && moyW > 0 ? fmtWeight(moyW) : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: `1px solid ${T.border}` }}>
+                      <td style={{ padding: "5px 6px 4px 0", color: T.textDim, fontSize: 10, fontStyle: "italic" }}>Total</td>
+                      <td style={tdS("#60A5FA")}><strong>{sumTotQty || "—"}</strong></td>
+                      <td style={tdS("#60A5FA")}><strong>{sumTotW > 0 ? fmtWeight(sumTotW) : "—"}</strong></td>
+                      <td style={tdS("#FB923C")}><strong>{sumMaxiQty || "—"}</strong></td>
+                      <td style={tdS("#FB923C")}><strong>{sumMaxiW > 0 ? fmtWeight(sumMaxiW) : "—"}</strong></td>
+                      <td style={tdS(sumEstQty < 0 ? T.error : "#34D399")}><strong>{sumEstQty < 0 ? `(${Math.abs(sumEstQty)})` : sumEstQty || "—"}</strong></td>
+                      <td style={tdS(sumEstW < 0 ? T.error : "#34D399")}><strong>{sumEstW < 0 ? `(${fmtWeight(Math.abs(sumEstW))})` : sumEstW > 0 ? fmtWeight(sumEstW) : "—"}</strong></td>
+                      <td style={tdS("#A78BFA")}><strong>{sumTotQty > 0 && sumTotW > 0 ? fmtWeight(sumTotW / sumTotQty) : "—"}</strong></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Tally */}
