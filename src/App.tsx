@@ -1567,6 +1567,7 @@ function ImportPage() {
                   ["🏗️ Colonne Destination", mapping.dch || "— non mappé"],
                   ["⚖️ Unité poids", poidsUnit === "kg" ? "Kilogrammes (kg)" : "Tonnes (t)"],
                   ["🔢 Réf. auto-groupée", autoRefFmt ? "Activé" : "Désactivé"],
+                  ["📐 Écran (px)", `${window.innerWidth} × ${window.innerHeight}`],
                   ...extras.filter((e) => e.label.trim()).map((e) => [`🔖 ${e.label}`, e.col ? e.col : "+ colonne vide"]),
                 ] as [string, string][]).map(([k, v]) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border2}33` }}>
@@ -2004,11 +2005,11 @@ function TablePage() {
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexShrink: 0 }}>
           <button
             className={`ste-btn${openToolbar ? " active" : ""}`}
-            onClick={() => setOpenToolbar((o) => !o)}
+            onClick={() => { setOpenToolbar((o) => !o); setOpenMouvements(false); }}
           >{openToolbar ? "✓ " : ""}Outils</button>
           <button
             className={`ste-btn${openMouvements ? " active" : ""}`}
-            onClick={() => setOpenMouvements((o) => !o)}
+            onClick={() => { setOpenMouvements((o) => !o); setOpenToolbar(false); }}
             style={(selectedDest && selectMode === "dest" ? (() => { const dc = destinations.find(d => d.name === selectedDest)?.color; return dc ? { background: `${dc}33`, borderColor: dc, color: dc } : {}; })() : {})}
           >{openMouvements ? "✓ " : ""}Mouvement</button>
         </div>
