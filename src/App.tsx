@@ -1840,6 +1840,7 @@ function TablePage() {
 
   const handleSortCol = (ci: number) => {
     if (selectMode === "col") { toggleSelectItem(ci); return; }
+    if (openToolbar && selectMode === "none") { setSelectMode("col"); setSelectedItems(new Set([ci])); return; }
     if (selectMode !== "none") return;
     if (sortCol !== ci) { setSortCol(ci); setSortDir("asc"); }
     else if (sortDir === "asc") { setSortDir("desc"); }
@@ -2410,7 +2411,12 @@ function TablePage() {
                     }
                   }}
                 >
-                  <td className="td-num" title={isPointed ? "Pointé ✅" : isAdded ? "Ligne ajoutée" : undefined}>
+                  <td
+                    className="td-num"
+                    title={isPointed ? "Pointé ✅" : isAdded ? "Ligne ajoutée" : openToolbar ? "Cliquer pour masquer la ligne" : undefined}
+                    onClick={openToolbar ? (e) => { e.stopPropagation(); if (selectMode !== "row") { setSelectMode("row"); setSelectedItems(new Set([ri])); } else { toggleSelectItem(ri); } } : undefined}
+                    style={openToolbar ? { cursor: "pointer" } : undefined}
+                  >
                     {isPointed
                       ? <span style={{ color: T.success, fontSize: 11 }}>✅</span>
                       : isAdded
