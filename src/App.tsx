@@ -1645,6 +1645,7 @@ function TablePage() {
   const [confirmUnpoint, setConfirmUnpoint] = useState<{ ri: number; ref: string } | null>(null);
   const [doubleVerif, setDoubleVerif] = useState(true);
   const [doubleVerifModal, setDoubleVerifModal] = useState<{ ri: number; ref: string; correct: number; choices: number[]; error: boolean; pendingDest?: string } | null>(null);
+  const [noDestWarning, setNoDestWarning] = useState(false);
   const [refGroupModal, setRefGroupModal] = useState(false);
   const [refGroupInput, setRefGroupInput] = useState("");
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2366,7 +2367,7 @@ function TablePage() {
                     if (touchScrolled.current) return;
                     if (selectMode === "row") { toggleSelectItem(ri); return; }
                     if (selectMode === "dest") {
-                      if (!selectedDest) { showToast("⚠️ Sélectionnez une destination d'abord", "error"); return; }
+                      if (!selectedDest) { setNoDestWarning(true); return; }
                         const existing = rowDestinations.get(ri);
                         if (existing && existing !== selectedDest) {
                           setConfirmReassign({ ri, from: existing, to: selectedDest });
@@ -2757,6 +2758,17 @@ function TablePage() {
         );
       })()}
 
+      {noDestWarning && (
+        <div style={{ position: "fixed", inset: 0, background: "#000a", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setNoDestWarning(false)}>
+          <div style={{ background: T.bgCard, borderRadius: 16, padding: "24px 20px", maxWidth: 320, width: "100%", boxShadow: "0 8px 40px #0008", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>⚠️</div>
+            <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 8 }}>Aucune destination sélectionnée</div>
+            <div style={{ color: T.textDim, fontSize: 12, marginBottom: 20 }}>Sélectionnez une destination dans le panneau Mouvements avant d'affecter des lignes.</div>
+            <button className="ste-btn" style={{ width: "100%", background: T.accent, color: "#0F172A", fontWeight: 700 }} onClick={() => setNoDestWarning(false)}>OK</button>
+          </div>
+        </div>
+      )}
+
       {refGroupModal && (
         <div style={{ position: "fixed", inset: 0, background: "#000a", zIndex: 2000, display: "flex", flexDirection: "column", justifyContent: "flex-end" }} onClick={() => setRefGroupModal(false)}>
           <div style={{ background: T.bgCard, borderRadius: "18px 18px 0 0", padding: "20px 16px 32px", boxShadow: "0 -4px 40px #0008" }} onClick={e => e.stopPropagation()}>
@@ -3083,7 +3095,7 @@ function RapportPage() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
                     <tr style={{ borderBottom: `1px solid ${T.border}44` }}>
-                      <th style={{ ...thS("left"), padding: "3px 6px 0 0" }} rowSpan={2}>Destination</th>
+                      <th style={{ ...thS("left"), padding: "3px 6px 0 0" }} rowSpan={2}>Dest.</th>
                       <th colSpan={2} style={{ ...thS(), color: "#60A5FA", borderBottom: `1px solid #60A5FA44`, paddingBottom: 2 }}>TOTAL</th>
                       <th colSpan={2} style={{ ...thS(), color: "#FB923C", opacity: 0.6, borderBottom: `1px solid #FB923C44`, paddingBottom: 2 }}>MAXI</th>
                       <th colSpan={2} style={{ ...thS(), color: "#34D399", borderBottom: `1px solid #34D39944`, paddingBottom: 2 }}>ESTIM.</th>
@@ -3182,7 +3194,7 @@ function RapportPage() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
                     <tr style={{ borderBottom: `1px solid ${T.border}44` }}>
-                      <th style={{ ...thS("left"), padding: "3px 6px 0 0" }} rowSpan={2}>Destination</th>
+                      <th style={{ ...thS("left"), padding: "3px 6px 0 0" }} rowSpan={2}>Dest.</th>
                       <th colSpan={2} style={{ ...thS(), color: "#60A5FA", borderBottom: `1px solid #60A5FA44`, paddingBottom: 2 }}>DÉCHARGÉ</th>
                       <th colSpan={2} style={{ ...thS(), color: "#FB923C", borderBottom: `1px solid #FB923C44`, paddingBottom: 2 }}>TOTAL</th>
                       <th colSpan={2} style={{ ...thS(), color: "#34D399", borderBottom: `1px solid #34D39944`, paddingBottom: 2 }}>RESTANT</th>
