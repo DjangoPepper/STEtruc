@@ -224,8 +224,19 @@ function AppProvider({ children }: { children: React.ReactNode }) {
     { name: "H3", color: "#3cbefc" },
     { name: "H4", color: "#ff9b2c" },
     { name: "HNE", color: "#94A3B8", excludeFromReport: true },
+    { name: "STOCK", color: "#64748B", excludeFromReport: true },
   ];
-  const [destinations, setDestinations] = useState<Destination[]>(() => lsGet("ste_destinations", defaultDestinations));
+  const [destinations, setDestinations] = useState<Destination[]>(() => {
+    const saved = lsGet<Destination[]>("ste_destinations", defaultDestinations);
+    // Migration : injecter STOCK si absent
+    if (!saved.some(d => d.name === "STOCK")) {
+      const hneIdx = saved.findIndex(d => d.name === "HNE");
+      const next = [...saved];
+      next.splice(hneIdx >= 0 ? hneIdx + 1 : next.length, 0, { name: "STOCK", color: "#64748B", excludeFromReport: true });
+      return next;
+    }
+    return saved;
+  });
 
   // ── Rapport manual inputs (persisted) ──────────────────────────────────────
   const [tallyPrevRaw, setTallyPrevRaw] = useState<Record<string, { qty: string; weight: string }>>(() => lsGet("ste_tallyPrev", {}));
@@ -1676,10 +1687,30 @@ function TablePage() {
   const [confirmUnpoint, setConfirmUnpoint] = useState<{ ri: number; ref: string } | null>(null);
   const [doubleVerif, setDoubleVerif] = useState(true);
   const [doubleVerifModal, setDoubleVerifModal] = useState<{ ri: number; ref: string; correct: number; choices: number[]; error: boolean; pendingDest?: string } | null>(null);
+  const [quickConfirmModal, setQuickConfirmModal] = useState<{ ri: number; ref: string; rang: string; poids: string; dest: string; destColor: string } | null>(null);
+  const [quickConfirmCountdown, setQuickConfirmCountdown] = useState(5);
   const [noDestWarning, setNoDestWarning] = useState(false);
   const [refGroupModal, setRefGroupModal] = useState(false);
   const [refGroupInput, setRefGroupInput] = useState("");
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Countdown pour quickConfirmModal (doubleVerif désactivé)
+  useEffect(() => {
+    if (!quickConfirmModal) return;
+    setQuickConfirmCountdown(5);
+    const interval = setInterval(() => {
+      setQuickConfirmCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          // auto-cancel
+          setQuickConfirmModal(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [quickConfirmModal?.ri]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!parsed) {
     return (
@@ -2429,6 +2460,18 @@ function TablePage() {
                                 return;
                               }
                             }
+                          } else {
+                            // Mode double vérif désactivé → quick confirm avec décompte
+                            const refIdx2   = mapping.reference ? headers.indexOf(mapping.reference) : -1;
+                            const rangIdx2  = mapping.rang      ? headers.indexOf(mapping.rang)      : -1;
+                            const poidsIdx2 = mapping.poids     ? headers.indexOf(mapping.poids)     : -1;
+                            const getCell2  = (ci: number) => rowOverrides.get(ri)?.[ci] !== undefined ? String(rowOverrides.get(ri)![ci] ?? "") : String(row[ci] ?? "");
+                            const refVal2   = refIdx2   >= 0 ? getCell2(refIdx2)   : "—";
+                            const rangVal2  = rangIdx2  >= 0 ? getCell2(rangIdx2)  : "—";
+                            const poidsVal2 = poidsIdx2 >= 0 ? getCell2(poidsIdx2) : "—";
+                            const dc = destinations.find(d => d.name === selectedDest)?.color ?? T.accent;
+                            setQuickConfirmModal({ ri, ref: refVal2, rang: rangVal2, poids: poidsVal2, dest: selectedDest, destColor: dc });
+                            return;
                           }
                           setRowDestinations((prev) => {
                             const next = new Map(prev);
@@ -2485,8 +2528,10 @@ function TablePage() {
                         onPointerUp={isRefCol ? () => { if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; } } : undefined}
                         onPointerLeave={isRefCol ? () => { if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; } } : undefined}
                       >
-                        {isDestCol && destCellVal
-                          ? <span style={{ color: destColor ?? T.accent, fontWeight: 700, fontSize: 11 }}>{destCellVal}</span>
+                        {isDestCol
+                          ? destCellVal
+                            ? <span style={{ color: destColor ?? T.accent, fontWeight: 700, fontSize: 11 }}>{destCellVal}</span>
+                            : <span style={{ color: T.textDim, fontSize: 11, opacity: 0.5 }}>STOCK</span>
                           : display ?? <span style={{ color: T.textDim }}>—</span>}
                       </td>
                     );
@@ -2725,6 +2770,58 @@ function TablePage() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Quick Confirm modal (doubleVerif désactivé) */}
+      {quickConfirmModal && (() => {
+        const { ref, rang, poids, dest, destColor } = quickConfirmModal;
+        const pct = (quickConfirmCountdown / 5) * 100;
+        const doConfirm = () => {
+          setRowDestinations(prev => { const next = new Map(prev); next.set(quickConfirmModal.ri, dest); return next; });
+          setQuickConfirmModal(null);
+        };
+        const doCancel = () => setQuickConfirmModal(null);
+        return (
+          <div className="pt-modal-overlay" style={{ zIndex: 1100 }} onClick={doCancel}>
+            <div className="pt-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 320 }}>
+              <div className="pt-modal-hdr">
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ color: T.textDim, fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase" }}>Vérification</span>
+                  <span style={{ color: T.accent, fontWeight: 900, fontSize: 15, fontFamily: "'Share Tech Mono', monospace" }}>🏷 {ref}</span>
+                </div>
+                <button onClick={doCancel} style={{ background: "none", border: "none", color: T.textDim, fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 0 }}>×</button>
+              </div>
+              <div style={{ padding: "14px 16px" }}>
+                {/* Résumé bobine */}
+                {[{ label: "Rang", value: rang }, { label: "Référence", value: ref }, { label: "Poids", value: poids }].map(({ label, value }) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border}33` }}>
+                    <span style={{ color: T.textDim, fontSize: 12 }}>{label}</span>
+                    <span style={{ color: T.text, fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{value}</span>
+                  </div>
+                ))}
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", marginBottom: 16, borderBottom: `1px solid ${T.border}33` }}>
+                  <span style={{ color: T.textDim, fontSize: 12 }}>Destination</span>
+                  <span style={{ color: destColor, fontWeight: 800, fontSize: 13, fontFamily: "monospace" }}>{dest}</span>
+                </div>
+                {/* Barre de décompte */}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ color: T.textDim, fontSize: 10 }}>Confirmation automatique dans…</span>
+                    <span style={{ color: T.warning, fontWeight: 800, fontSize: 14, fontFamily: "monospace" }}>{quickConfirmCountdown}s</span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 99, background: T.border, overflow: "hidden" }}>
+                    <div style={{ height: "100%", borderRadius: 99, background: T.warning, width: `${pct}%`, transition: "width 1s linear" }} />
+                  </div>
+                </div>
+                {/* Boutons */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button className="ste-btn" style={{ flex: 1 }} onClick={doCancel}>✕ Annuler</button>
+                  <button className="ste-btn" style={{ flex: 1, background: `${destColor}33`, borderColor: destColor, color: destColor, fontWeight: 800 }} onClick={doConfirm}>✓ Confirmer</button>
+                </div>
               </div>
             </div>
           </div>
@@ -3299,7 +3396,6 @@ function RapportPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
             {[
               { label: "Lignes totales",   val: String(totalRows),       color: T.text },
-              { label: "Pointées",          val: String(totalPointed),    color: T.success },
               { label: "Affectées (dest.)", val: String(totalAffected),   color: "#A78BFA" },
               ...(reassignedRows.size > 0 ? [
                 { label: "Réaffectations",  val: String(reassignedRows.size), color: T.error },
