@@ -114,7 +114,13 @@ interface AppState {
   // winwin modal
   winwinModalOpen: boolean;
   setWinwinModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  rapportResetKey: number;
+  // rapport manual inputs
+  tallyPrev: Record<string, { qty: string; weight: string }>;
+  setTallyPrev: (v: Record<string, { qty: string; weight: string }> | ((p: Record<string, { qty: string; weight: string }>) => Record<string, { qty: string; weight: string }>)) => void;
+  chargementMaxi: Record<string, { qty: string; weight: string }>;
+  setChargementMaxi: (v: Record<string, { qty: string; weight: string }> | ((p: Record<string, { qty: string; weight: string }>) => Record<string, { qty: string; weight: string }>)) => void;
+  dechargementMaxi: Record<string, { qty: string; weight: string }>;
+  setDechargementMaxi: (v: Record<string, { qty: string; weight: string }> | ((p: Record<string, { qty: string; weight: string }>) => Record<string, { qty: string; weight: string }>)) => void;
   // helpers
   loadSheet: (wb: XLSX.WorkBook, sheet: string) => void;
   handleFile: (file: File) => void;
@@ -220,11 +226,18 @@ function AppProvider({ children }: { children: React.ReactNode }) {
     { name: "HNE", color: "#94A3B8", excludeFromReport: true },
   ];
   const [destinations, setDestinations] = useState<Destination[]>(() => lsGet("ste_destinations", defaultDestinations));
+
+  // ── Rapport manual inputs (persisted) ──────────────────────────────────────
+  const [tallyPrevRaw, setTallyPrevRaw] = useState<Record<string, { qty: string; weight: string }>>(() => lsGet("ste_tallyPrev", {}));
+  const setTallyPrev = (v: Record<string, { qty: string; weight: string }> | ((p: Record<string, { qty: string; weight: string }>) => Record<string, { qty: string; weight: string }>)) => { setTallyPrevRaw(prev => { const next = typeof v === "function" ? v(prev) : v; lsSet("ste_tallyPrev", next); return next; }); };
+  const [chargementMaxiRaw, setChargementMaxiRaw] = useState<Record<string, { qty: string; weight: string }>>(() => lsGet("ste_chargementMaxi", {}));
+  const setChargementMaxi = (v: Record<string, { qty: string; weight: string }> | ((p: Record<string, { qty: string; weight: string }>) => Record<string, { qty: string; weight: string }>)) => { setChargementMaxiRaw(prev => { const next = typeof v === "function" ? v(prev) : v; lsSet("ste_chargementMaxi", next); return next; }); };
+  const [dechargementMaxiRaw, setDechargementMaxiRaw] = useState<Record<string, { qty: string; weight: string }>>(() => lsGet("ste_dechargementMaxi", {}));
+  const setDechargementMaxi = (v: Record<string, { qty: string; weight: string }> | ((p: Record<string, { qty: string; weight: string }>) => Record<string, { qty: string; weight: string }>)) => { setDechargementMaxiRaw(prev => { const next = typeof v === "function" ? v(prev) : v; lsSet("ste_dechargementMaxi", next); return next; }); };
   const [selectedDest, setSelectedDest] = useState<string>("");
   const [rowDestinations, setRowDestinations] = useState<Map<number, string>>(new Map());
   const [reassignedRows, setReassignedRows] = useState<Map<number, { from: string; to: string }[]>>(new Map());
   const [winwinModalOpen, setWinwinModalOpen] = useState(false);
-  const [rapportResetKey, setRapportResetKey] = useState(0);
 
   // Stockage de l'état de chaque onglet (persist entre changements d'onglet)
   const sheetStates = useRef<Map<string, SheetState>>(new Map());
@@ -302,9 +315,11 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       setRowDestinations(new Map());
       setReassignedRows(new Map());
       setSplitFormats({});
-      // Efface les valeurs saisies manuellement dans Rapport
+      // Effacer les valeurs saisies manuellement dans Rapport
       ["ste_tallyPrev", "ste_chargementMaxi", "ste_dechargementMaxi"].forEach(k => { try { localStorage.removeItem(k); } catch {} });
-      setRapportResetKey(k => k + 1);
+      setTallyPrev({});
+      setChargementMaxi({});
+      setDechargementMaxi({});
       loadSheet(wb, defaultSheet);
     };
     reader.readAsArrayBuffer(file);
@@ -371,7 +386,9 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       rowDestinations, setRowDestinations,
       reassignedRows, setReassignedRows,
       winwinModalOpen, setWinwinModalOpen,
-      rapportResetKey,
+      tallyPrev: tallyPrevRaw, setTallyPrev,
+      chargementMaxi: chargementMaxiRaw, setChargementMaxi,
+      dechargementMaxi: dechargementMaxiRaw, setDechargementMaxi,
       loadSheet, handleFile,
       allRows, repetitiveByCol,
       sheetStates,
@@ -2840,7 +2857,9 @@ function RapportPage() {
     pointedRows,
     destinations, rowDestinations, reassignedRows,
     poidsUnit, autoRefFmt,
-    rapportResetKey,
+    tallyPrev, setTallyPrev,
+    chargementMaxi, setChargementMaxi,
+    dechargementMaxi, setDechargementMaxi,
   } = useApp();
 
   const [openResume, setOpenResume] = useState(false);
@@ -2850,25 +2869,6 @@ function RapportPage() {
   const [openTally, setOpenTally] = useState(false);
   const [openPointees, setOpenPointees] = useState(true);
   const [openReaff, setOpenReaff] = useState(true);
-
-  function rLs<T>(key: string, fb: T): T { try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) as T : fb; } catch { return fb; } }
-  function wLs(key: string, v: unknown) { try { localStorage.setItem(key, JSON.stringify(v)); } catch {} }
-
-  const [tallyPrev, setTallyPrevRaw] = useState<Record<string, { qty: string; weight: string }>>(() => rLs("ste_tallyPrev", {}));
-  const setTallyPrev: typeof setTallyPrevRaw = (v) => { setTallyPrevRaw(prev => { const next = typeof v === "function" ? v(prev) : v; wLs("ste_tallyPrev", next); return next; }); };
-
-  const [chargementMaxi, setChargementMaxiRaw] = useState<Record<string, { qty: string; weight: string }>>(() => rLs("ste_chargementMaxi", {}));
-  const setChargementMaxi: typeof setChargementMaxiRaw = (v) => { setChargementMaxiRaw(prev => { const next = typeof v === "function" ? v(prev) : v; wLs("ste_chargementMaxi", next); return next; }); };
-
-  const [dechargementMaxi, setDechargementMaxiRaw] = useState<Record<string, { qty: string; weight: string }>>(() => rLs("ste_dechargementMaxi", {}));
-  const setDechargementMaxi: typeof setDechargementMaxiRaw = (v) => { setDechargementMaxiRaw(prev => { const next = typeof v === "function" ? v(prev) : v; wLs("ste_dechargementMaxi", next); return next; }); };
-
-  useEffect(() => {
-    if (rapportResetKey === 0) return;
-    setTallyPrevRaw({});
-    setChargementMaxiRaw({});
-    setDechargementMaxiRaw({});
-  }, [rapportResetKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!parsed) {
     return (
