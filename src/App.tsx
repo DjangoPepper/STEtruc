@@ -1985,7 +1985,7 @@ function TablePage() {
   `;
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: T.bg, paddingBottom: 64 }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: T.bg, overflow: "hidden" }}>
       <style>{css}</style>
       {/* ── Barre unique : info + outils + retract ── */}
       <div style={{
@@ -2000,17 +2000,18 @@ function TablePage() {
         <PointageInfos />
         {/* Séparateur */}
         <span style={{ color: "#7C3AED99", fontSize: 12, margin: "0 2px" }}>|</span>
-        {/* Boutons Outils + Mouvement */}
-        <button
-          className={`ste-btn${openToolbar ? " active" : ""}`}
-          onClick={() => setOpenToolbar((o) => !o)}
-          style={{ marginLeft: "auto", flexShrink: 0 }}
-        >{openToolbar ? "✓ " : ""}Outils</button>
-        <button
-          className={`ste-btn${openMouvements ? " active" : ""}`}
-          onClick={() => setOpenMouvements((o) => !o)}
-          style={{ flexShrink: 0, ...(selectedDest && selectMode === "dest" ? (() => { const dc = destinations.find(d => d.name === selectedDest)?.color; return dc ? { background: `${dc}33`, borderColor: dc, color: dc } : {}; })() : {}) }}
-        >{openMouvements ? "✓ " : ""}Mouvement</button>
+        {/* Boutons Outils + Mouvement — toujours sur la même ligne */}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexShrink: 0 }}>
+          <button
+            className={`ste-btn${openToolbar ? " active" : ""}`}
+            onClick={() => setOpenToolbar((o) => !o)}
+          >{openToolbar ? "✓ " : ""}Outils</button>
+          <button
+            className={`ste-btn${openMouvements ? " active" : ""}`}
+            onClick={() => setOpenMouvements((o) => !o)}
+            style={(selectedDest && selectMode === "dest" ? (() => { const dc = destinations.find(d => d.name === selectedDest)?.color; return dc ? { background: `${dc}33`, borderColor: dc, color: dc } : {}; })() : {})}
+          >{openMouvements ? "✓ " : ""}Mouvement</button>
+        </div>
       </div>
 
       {/* Cadre Outils */}
@@ -2318,9 +2319,10 @@ function TablePage() {
       {/* Table */}
       <div style={{
         flex: 1, overflowX: "auto", overflowY: "auto",
-        margin: "8px 12px 0", maxHeight: "calc(100dvh - 340px)",
+        margin: "8px 12px 0",
         border: `1px solid ${T.border}`, borderRadius: 8, background: T.bgCard,
         WebkitOverflowScrolling: "touch",
+        minHeight: 0,
       }}>
         <table className="pt-table">
           <thead>
@@ -2503,7 +2505,7 @@ function TablePage() {
       </div>
 
       {/* Pagination */}
-      <div style={{ margin: "8px 12px 4px", display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ margin: "8px 12px 4px", display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center", flexShrink: 0 }}>
         <button className="page-btn" onClick={() => setPageIdx(0)} disabled={safePage === 0}>«</button>
         <button className="page-btn" onClick={() => setPageIdx((p) => Math.max(0, p - 1))} disabled={safePage === 0}>‹</button>
         {Array.from({ length: totalPages }, (_, i) => i)
@@ -3707,7 +3709,7 @@ function AppInner() {
       position: "relative", overflow: "hidden",
     }}>
       <Toast />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {pages[activeTab]}
       </div>
       <BottomNav />
