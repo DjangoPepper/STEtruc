@@ -114,6 +114,7 @@ interface AppState {
   // winwin modal
   winwinModalOpen: boolean;
   setWinwinModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  rapportResetKey: number;
   // helpers
   loadSheet: (wb: XLSX.WorkBook, sheet: string) => void;
   handleFile: (file: File) => void;
@@ -223,6 +224,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   const [rowDestinations, setRowDestinations] = useState<Map<number, string>>(new Map());
   const [reassignedRows, setReassignedRows] = useState<Map<number, { from: string; to: string }[]>>(new Map());
   const [winwinModalOpen, setWinwinModalOpen] = useState(false);
+  const [rapportResetKey, setRapportResetKey] = useState(0);
 
   // Stockage de l'état de chaque onglet (persist entre changements d'onglet)
   const sheetStates = useRef<Map<string, SheetState>>(new Map());
@@ -300,6 +302,9 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       setRowDestinations(new Map());
       setReassignedRows(new Map());
       setSplitFormats({});
+      // Efface les valeurs saisies manuellement dans Rapport
+      ["ste_tallyPrev", "ste_chargementMaxi", "ste_dechargementMaxi"].forEach(k => { try { localStorage.removeItem(k); } catch {} });
+      setRapportResetKey(k => k + 1);
       loadSheet(wb, defaultSheet);
     };
     reader.readAsArrayBuffer(file);
@@ -366,6 +371,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       rowDestinations, setRowDestinations,
       reassignedRows, setReassignedRows,
       winwinModalOpen, setWinwinModalOpen,
+      rapportResetKey,
       loadSheet, handleFile,
       allRows, repetitiveByCol,
       sheetStates,
@@ -1233,10 +1239,17 @@ function ImportPage() {
                     <thead>
                       <tr style={{ position: "sticky", top: 0, background: T.bgDark, zIndex: 1 }}>
                         {visibleCols.map(({ h, i }) => (
-                          <th key={i} style={{
-                            color: T.textDim, padding: "5px 6px", textAlign: "left",
-                            borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap", fontWeight: 700,
-                          }}>
+                          <th key={i}
+                            onClick={openHeaders ? () => deleteColumn(i) : undefined}
+                            title={openHeaders ? `Cliquer pour masquer la colonne "${h}"` : undefined}
+                            style={{
+                              color: openHeaders ? T.error : T.textDim, padding: "5px 6px", textAlign: "left",
+                              borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap", fontWeight: 700,
+                              cursor: openHeaders ? "pointer" : "default",
+                              background: openHeaders ? `${T.error}11` : undefined,
+                            }}
+                          >
+                            {openHeaders && <span style={{ fontSize: 9, marginRight: 3, opacity: 0.6 }}>✕</span>}
                             {h}
                           </th>
                         ))}
@@ -2827,6 +2840,7 @@ function RapportPage() {
     pointedRows,
     destinations, rowDestinations, reassignedRows,
     poidsUnit, autoRefFmt,
+    rapportResetKey,
   } = useApp();
 
   const [openResume, setOpenResume] = useState(false);
@@ -2848,6 +2862,13 @@ function RapportPage() {
 
   const [dechargementMaxi, setDechargementMaxiRaw] = useState<Record<string, { qty: string; weight: string }>>(() => rLs("ste_dechargementMaxi", {}));
   const setDechargementMaxi: typeof setDechargementMaxiRaw = (v) => { setDechargementMaxiRaw(prev => { const next = typeof v === "function" ? v(prev) : v; wLs("ste_dechargementMaxi", next); return next; }); };
+
+  useEffect(() => {
+    if (rapportResetKey === 0) return;
+    setTallyPrevRaw({});
+    setChargementMaxiRaw({});
+    setDechargementMaxiRaw({});
+  }, [rapportResetKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!parsed) {
     return (
