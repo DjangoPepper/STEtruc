@@ -1529,7 +1529,7 @@ function ImportPage() {
                 {([
                   ["Fichier", fileName ?? "—"],
                   ["Onglet actif", activeSheet ?? "—"],
-                  ["Colonnes visibles", String(visibleCount)],
+                  ["Colonnes importables", String(visibleCount)],
                   ["Lignes totales", String(totalRows)],
                   ["📍 Colonne Rang", mapping.rang || "— non mappé"],
                   ["🏷 Colonne Référence", mapping.reference || "— non mappé"],
@@ -1979,7 +1979,7 @@ function TablePage() {
         <button
           className={`ste-btn${openMouvements ? " active" : ""}`}
           onClick={() => setOpenMouvements((o) => !o)}
-          style={{ flexShrink: 0 }}
+          style={{ flexShrink: 0, ...(selectedDest && selectMode === "dest" ? (() => { const dc = destinations.find(d => d.name === selectedDest)?.color; return dc ? { background: `${dc}33`, borderColor: dc, color: dc } : {}; })() : {}) }}
         >{openMouvements ? "✓ " : ""}Mouvement</button>
       </div>
 
