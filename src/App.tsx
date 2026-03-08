@@ -1871,8 +1871,26 @@ function TablePage() {
     }
     return widths;
   }, [sortedRows, visibleCols, headers, mapping, extras, poidsUnit, numColW]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Détection des lignes atypiques (visuel uniquement)
+  // Taille de police dynamique : la plus grande qui ne déborde dans aucune colonne
+  const tableFontSize = useMemo(() => {
+    const PAD = 20;      // padding horizontal total par cellule
+    const CH_RATIO = 0.60; // char_width / font_size pour monospace
+    let maxFs = 14;
+    visibleCols.forEach(ci => {
+      const w = (colWidths.get(ci) ?? 38) - PAD;
+      if (w <= 0) return;
+      let maxLen = 0;
+      for (const { row: r } of sortedRows.slice(0, 100)) {
+        const v = r[ci];
+        if (v !== null && v !== undefined) maxLen = Math.max(maxLen, String(v).length);
+      }
+      if (maxLen > 0) {
+        const fs = Math.floor(w / (maxLen * CH_RATIO));
+        maxFs = Math.min(maxFs, fs);
+      }
+    });
+    return Math.max(9, maxFs);
+  }, [colWidths, visibleCols, sortedRows]);
   const anomalyRowSet = useMemo(() => {
     if (allRows.length === 0) return new Set<number>();
     const visibleRIs = allRows.map((_, ri) => ri).filter((ri) => !hiddenRows.has(ri));
@@ -1911,7 +1929,7 @@ function TablePage() {
   };
 
   const css = `
-    .pt-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 18px; }
+    .pt-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: ${tableFontSize}px; }
     .pt-table thead th {
       background: #131E2E; color: ${T.textMuted};
       font-size: 14px; letter-spacing: 0.07em; text-transform: uppercase;
@@ -2055,6 +2073,7 @@ function TablePage() {
           border: `1px solid #7C3AED66`,
           borderRadius: 10,
           display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center",
+          maxHeight: "35dvh", overflowY: "auto", flexShrink: 0,
         }}>
           <div className={`dim-chip${dimRepeated ? " on" : ""}`} onClick={() => setDimRepeated((v) => !v)}>
             <span className="dim-dot" />Rép.
@@ -2104,6 +2123,7 @@ function TablePage() {
           background: T.bgCard,
           border: `1px solid #7C3AED66`,
           borderRadius: 10,
+          maxHeight: "45dvh", overflowY: "auto", flexShrink: 0,
         }}>
           {/* En-tête */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -3003,7 +3023,7 @@ function RapportPage() {
     destStatsMap.set(dest, { count: s.count + 1, weight: s.weight + w });
   }
 
-  const totalPointed = pointedRows.size;
+  void pointedRows; // kept for reference
   const totalAffected = [...rowDestinations.entries()].filter(([, d]) => !excludedFromReport.has(d)).length;
   const totalRows = visibleRows.length;
   const totalWeight = poidsIdx >= 0
