@@ -17,7 +17,7 @@ import * as XLSX from "xlsx";
 
 type CellValue = string | number | boolean | null;
 type RawData = CellValue[][];
-type Tab = "import" | "tableau" | "rapport" | "export";
+type Tab = "import" | "iec" | "tableau" | "rapport" | "export";
 type SelectMode = "none" | "col" | "row" | "dest";
 type SheetSelectMode = "none" | "delete" | "keep";
 
@@ -459,6 +459,7 @@ function BottomNav() {
   const { activeTab, setActiveTab, parsed } = useApp();
   const tabs: { id: Tab; icon: string; label: string }[] = [
     { id: "import",  icon: "⬇️",  label: "Import"  },
+    { id: "iec",  icon: "⬇️📊",  label: "Iec"  },
     { id: "tableau", icon: "📊",  label: "Pointage" },
     { id: "rapport", icon: "📋",  label: "Rapport"  },
     { id: "export",  icon: "⬆️",  label: "Export"  },
@@ -763,7 +764,11 @@ function autoFormatRef(val: string, globalFmt: string): string {
   }
   return globalFmt ? applyGrouping(str, globalFmt) : str;
 }
-
+import ExcelCleaner from "./IEC/new-exelcleaner";
+function IecPage() {
+  // On peut ajouter ici des props si besoin
+  return <ExcelCleaner dark={false} onDarkToggle={() => {}} onSendToPointage={() => {}} />;
+}
 function ImportPage() {
   const {
     handleFile, parsed, setParsed, fileName,
@@ -3812,6 +3817,7 @@ function AppInner() {
 
   const pages: Record<Tab, React.ReactNode> = {
     import:  <ImportPage />,
+    iec:  <IecPage />,
     tableau: <TablePage />,
     rapport: <RapportPage />,
     export:  <ExportPage />,
