@@ -676,59 +676,61 @@ export default function ExcelCleaner({ onSendToPointage }: ExcelCleanerProps) {
               <span style={{ marginLeft: 10, color: T.success }}>+{addedRows.length} ajoutée(s)</span>
             )}
           </span>
-          {/* Actions */}
-          <Btn
-            variant="success"
-            small
-            title="Enregistrer, envoyer et ouvrir Pointage"
-            onClick={() => {
-              if (!parsed) return;
-              // 1. Exporter le fichier Excel nettoyé
-              exportClean();
-              // 2. Préparer les données nettoyées pour PointageTab
-              const visHdrs = headers.filter((_, i) => !hiddenCols.has(i));
-              const visRows = allRows
-                .filter((_, i) => !hiddenRows.has(i))
-                .map((row) => {
-                  const padded = [...row];
-                  while (padded.length < headers.length) padded.push(null);
-                  return padded.filter((_, ci) => !hiddenCols.has(ci));
-                });
-              onSendToPointage({ headers: visHdrs, rows: visRows, fileName: fileName ?? "fichier" });
-              // 3. Basculer sur l'onglet Pointage
-              try {
-                // Utilise le contexte global si possible
-                const evt = new CustomEvent("STEtruc_setActiveTab", { detail: { tab: "tableau" } });
-                window.dispatchEvent(evt);
-              } catch (e) {
-                // fallback: rien
-              }
-            }}
-          >
-            ↗ Pointage
-          </Btn>
-          <div className="export-wrap">
-            <input
-              className="export-input"
-              value={exportFileName}
-              onChange={(e) => setExportFileName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") exportClean(); }}
-              spellCheck={false}
-            />
-            <span className="export-ext">.xlsx</span>
-            <button className="export-btn" onClick={exportClean}>↓ Exporter</button>
-          </div>
-          <Btn
-            variant="danger"
-            small
-            onClick={() => {
-              setParsed(null); setFileName(null); setWorkbook(null);
-              setSheetNames([]); setActiveSheet(null); setAddedRows([]);
-              setHiddenSheets(new Set()); setSheetSelectMode("none"); setSelectedSheets(new Set());
-            }}
-          >
-            ✕ Reset
-          </Btn>
+            {/* Actions regroupées */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="export-wrap">
+                <input
+                  className="export-input"
+                  value={exportFileName}
+                  onChange={(e) => setExportFileName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") exportClean(); }}
+                  spellCheck={false}
+                />
+                <span className="export-ext">.xlsx</span>
+                <button className="export-btn" onClick={exportClean}>↓ Exporter</button>
+              </div>
+              <Btn
+                variant="success"
+                small
+                title="Enregistrer, envoyer et ouvrir Pointage"
+                onClick={() => {
+                  if (!parsed) return;
+                  // 1. Exporter le fichier Excel nettoyé
+                  exportClean();
+                  // 2. Préparer les données nettoyées pour PointageTab
+                  const visHdrs = headers.filter((_, i) => !hiddenCols.has(i));
+                  const visRows = allRows
+                    .filter((_, i) => !hiddenRows.has(i))
+                    .map((row) => {
+                      const padded = [...row];
+                      while (padded.length < headers.length) padded.push(null);
+                      return padded.filter((_, ci) => !hiddenCols.has(ci));
+                    });
+                  onSendToPointage({ headers: visHdrs, rows: visRows, fileName: fileName ?? "fichier" });
+                  // 3. Basculer sur l'onglet Pointage
+                  try {
+                    // Utilise le contexte global si possible
+                    const evt = new CustomEvent("STEtruc_setActiveTab", { detail: { tab: "tableau" } });
+                    window.dispatchEvent(evt);
+                  } catch (e) {
+                    // fallback: rien
+                  }
+                }}
+              >
+                ↗ Pointage
+              </Btn>
+              <Btn
+                variant="danger"
+                small
+                onClick={() => {
+                  setParsed(null); setFileName(null); setWorkbook(null);
+                  setSheetNames([]); setActiveSheet(null); setAddedRows([]);
+                  setHiddenSheets(new Set()); setSheetSelectMode("none"); setSelectedSheets(new Set());
+                }}
+              >
+                ✕ Reset
+              </Btn>
+            </div>
         </div>
       )}
 
@@ -768,63 +770,64 @@ export default function ExcelCleaner({ onSendToPointage }: ExcelCleanerProps) {
                 padding: "12px 14px",
                 marginBottom: 16,
               }}>
-                {/* Section label */}
-                <div style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: T.textDim, marginBottom: 8, fontFamily: "'IBM Plex Mono', monospace" }}>
-                  Onglets · {sheetNames.length - hiddenSheets.size}/{sheetNames.length} visibles
-                </div>
-                {/* Controls */}
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                  {sheetSelectMode === "none" ? (
-                    <>
-                      <Btn
-                        small
-                        variant="danger"
-                        onClick={() => {
-                          setSheetSelectMode("delete");
-                          setSelectedSheets(new Set());
-                        }}
-                      >
-                        ✕ Supprimer onglets
-                      </Btn>
-                      <Btn
-                        small
-                        variant="success"
-                        onClick={() => {
-                          setSheetSelectMode("keep");
-                          setSelectedSheets(new Set());
-                        }}
-                      >
-                        ✓ Conserver onglets
-                      </Btn>
-                      {hiddenSheets.size > 0 && (
-                        <Btn small onClick={() => setHiddenSheets(new Set())}>Restaurer onglets</Btn>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span style={{ fontSize: 11, color: sheetSelectMode === "delete" ? "#fca5a5" : T.success, letterSpacing: "0.06em", fontFamily: "'IBM Plex Mono', monospace" }}>
-                        {sheetSelectMode === "delete" ? "→ Cliquez les onglets à supprimer" : "→ Cliquez les onglets à conserver"}
-                      </span>
-                      {selectedSheets.size > 0 && (
+                {/* Section label + boutons */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <div style={{ fontSize: 9, letterSpacing: "0.15em", textTransform: "uppercase", color: T.textDim, fontFamily: "'IBM Plex Mono', monospace", flex: 1 }}>
+                    Onglets · {sheetNames.length - hiddenSheets.size}/{sheetNames.length} visibles
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {sheetSelectMode === "none" ? (
+                      <>
                         <Btn
                           small
-                          variant={sheetSelectMode === "keep" ? "success" : "danger"}
-                          onClick={applySheetAction}
+                          variant="danger"
+                          onClick={() => {
+                            setSheetSelectMode("delete");
+                            setSelectedSheets(new Set());
+                          }}
                         >
-                          {sheetSelectMode === "delete" ? `Supprimer ${selectedSheets.size}` : `Garder ${selectedSheets.size}`}
+                          ✕ Supprimer
                         </Btn>
-                      )}
-                      <Btn
-                        small
-                        onClick={() => {
-                          setSheetSelectMode("none");
-                          setSelectedSheets(new Set());
-                        }}
-                      >
-                        Annuler
-                      </Btn>
-                    </>
-                  )}
+                        <Btn
+                          small
+                          variant="success"
+                          onClick={() => {
+                            setSheetSelectMode("keep");
+                            setSelectedSheets(new Set());
+                          }}
+                        >
+                          ✓ Conserver
+                        </Btn>
+                        {hiddenSheets.size > 0 && (
+                          <Btn small onClick={() => setHiddenSheets(new Set())}>Restaurer onglets</Btn>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: 11, color: sheetSelectMode === "delete" ? "#fca5a5" : T.success, letterSpacing: "0.06em", fontFamily: "'IBM Plex Mono', monospace" }}>
+                          {sheetSelectMode === "delete" ? "→ Cliquez les onglets à supprimer" : "→ Cliquez les onglets à conserver"}
+                        </span>
+                        {selectedSheets.size > 0 && (
+                          <Btn
+                            small
+                            variant={sheetSelectMode === "keep" ? "success" : "danger"}
+                            onClick={applySheetAction}
+                          >
+                            {sheetSelectMode === "delete" ? `Supprimer ${selectedSheets.size}` : `Garder ${selectedSheets.size}`}
+                          </Btn>
+                        )}
+                        <Btn
+                          small
+                          onClick={() => {
+                            setSheetSelectMode("none");
+                            setSelectedSheets(new Set());
+                          }}
+                        >
+                          Annuler
+                        </Btn>
+                      </>
+                    )}
+                  </div>
                 </div>
                 {/* Tabs */}
                 <div className="iec-sheet-tabs">

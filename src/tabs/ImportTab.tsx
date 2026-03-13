@@ -55,9 +55,9 @@ export default function ImportPage() {
     setEditableRows(allRows);
     setSplitFormats({});
     setMapping({
-      rang:      headers.find((k) => /rang|row|line|ligne/i.test(k)) ?? "",
-      reference: headers.find((k) => /ref|coil|serial|num|id|bobine/i.test(k)) ?? headers[0] ?? "",
-      poids:     headers.find((k) => /poids|weight|kg|tonne|masse/i.test(k)) ?? "",
+      rang:      headers.find((k) => /rang|n°|row|id|line|ligne/i.test(k)) ?? "",
+      reference: headers.find((k) => /ref|coil|serial|coils|brames|bobine/i.test(k)) ?? headers[0] ?? "",
+      poids:     headers.find((k) => /poids|weight|kg|ton(ne)|masse|bruto/i.test(k)) ?? "",
       dch:       headers.find((k) => /dch|d[eé]chargement|dest(ination)?/i.test(k)) ?? "",
     });
     setExtras([]);

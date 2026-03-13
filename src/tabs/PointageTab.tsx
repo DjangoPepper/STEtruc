@@ -9,10 +9,9 @@ import { Btn, EmptyState, PointageInfos, AddRowModal } from "../components";
 
 export default function PointageTab() {
   const {
-    parsed, headers, setHeaders,
+    parsed, headers,
     hiddenCols, setHiddenCols: _setHiddenCols, hiddenRows, setHiddenRows: _setHiddenRows,
     selectMode, setSelectMode, selectedItems, setSelectedItems,
-    editingHeader, setEditingHeader,
     dimRepeated, setDimRepeated,
     allRows, repetitiveByCol, addedRows,
     setActiveTab, showToast,
@@ -174,13 +173,14 @@ export default function PointageTab() {
 
   const numColW = Math.max(28, String(allRows.length).length * 8 + 14);
 
+  // Réduit la largeur de la colonne index
   const colWidths = useMemo(() => {
     const CH_DATA = 9.5; const CH_HDR = 8; const MIN_W = 38; const MAX_W = 200;
-    const PAD = 20; const NUM_W = numColW; const VIEWPORT = 380;
+    const PAD = 20; const NUM_W = 24; const VIEWPORT = 380;
     const sample = sortedRows.slice(0, 80);
     const ideals = new Map<number, number>();
     visibleCols.forEach((ci) => {
-      const hLen = colLabel(ci).replace(/[^\x00-\x7F]/g, "  ").length;
+      const hLen = colLabel(ci).replace(/[^ -]/g, "  ").length;
       let maxData = 0;
       for (const { row } of sample) { const v = row[ci]; if (v !== null && v !== undefined) maxData = Math.max(maxData, String(v).length); }
       ideals.set(ci, Math.min(MAX_W, Math.max(MIN_W, Math.max(hLen * CH_HDR, maxData * CH_DATA) + PAD)));
@@ -197,7 +197,7 @@ export default function PointageTab() {
       visibleCols.forEach((ci) => { const ideal = ideals.get(ci) ?? MIN_W; widths.set(ci, Math.round(MIN_W + (ideal - MIN_W) * ratio)); });
     }
     return widths;
-  }, [sortedRows, visibleCols, headers, mapping, extras, poidsUnit, numColW]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sortedRows, visibleCols, headers, mapping, extras, poidsUnit]);
 
   const tableFontSize = useMemo(() => {
     const PAD = 20; const CH_RATIO = 0.60;
@@ -483,16 +483,8 @@ export default function PointageTab() {
                 return (
                   <th key={ci} className={cls} style={{ width: colWidths.get(ci) ?? 60 }}>
                     <div className="th-inner" onClick={() => handleSortCol(ci)}>
-                      {editingHeader === ci ? (
-                        <input className="header-input" value={headers[ci]} autoFocus
-                          onChange={(e) => { const next = [...headers]; next[ci] = e.target.value; setHeaders(next); }}
-                          onBlur={() => setEditingHeader(null)}
-                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingHeader(null); }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <span onDoubleClick={() => selectMode === "none" && setEditingHeader(ci)} style={{ flex: 1 }}>{colLabel(ci)}</span>
-                      )}
+                      {/* Désactive le renommage des headers */}
+                      <span style={{ flex: 1 }}>{colLabel(ci)}</span>
                       {isSortedCol && <span style={{ fontSize: 9, flexShrink: 0 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
                       {!isSortedCol && <span style={{ fontSize: 8, flexShrink: 0, opacity: 0.2 }}>⇅</span>}
                     </div>
