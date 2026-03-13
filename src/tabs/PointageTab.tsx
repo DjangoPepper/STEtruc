@@ -5,7 +5,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { T, CellValue, applyGrouping, thsep, autoFormatRef } from "../types";
 import { useApp } from "../AppContext";
-import { Btn, EmptyState, PointageInfos, AddRowModal } from "../components";
+import { Btn, EmptyState, AddRowModal } from "../components";
 
 export default function PointageTab() {
     // Affichage des headers : 'icon' ou 'name'
@@ -27,6 +27,7 @@ export default function PointageTab() {
     selectedDest, setSelectedDest,
     rowDestinations, setRowDestinations,
     reassignedRows: _reassignedRows, setReassignedRows,
+    fileName,
   } = useApp();
 
   const [showAddRow,  setShowAddRow]  = useState(false);
@@ -122,7 +123,11 @@ export default function PointageTab() {
       if (i >= 0) mappingLabels.set(i, ex.label.trim());
     }
   });
-  const colLabel = (i: number): string => mappingLabels.get(i) ?? (i === destIdx ? "DEST" : headers[i]);
+  const colLabel = (i: number): string => {
+    const label = mappingLabels.get(i) ?? (i === destIdx ? "DEST" : headers[i]);
+    // Remplace 'colonne x' par 'col x'
+    return label.replace(/^colonne\s*(\d+)$/i, 'col $1');
+  };
 
   const baseRows = allRows.map((row, ri) => ({ row, ri })).filter(({ ri }) => !hiddenRows.has(ri));
   const filteredRows = baseRows.filter(({ row, ri }) =>
@@ -299,10 +304,26 @@ export default function PointageTab() {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: T.bg, overflow: "hidden" }}>
       <style>{css}</style>
 
-      {/* Barre supérieure */}
+      {/* Barre supérieure avec nom fichier réduit et pagination */}
       <div style={{ padding: "5px 12px", background: T.bgDark, borderBottom: `1px solid #7C3AED66`, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <span style={{ color: T.text, fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>Pointage</span>
-        <PointageInfos />
+        {/* Nom du fichier réduit à 4 caractères, tooltip complet */}
+        {fileName && (
+          <span
+            style={{ color: T.textDim, fontSize: 13, fontWeight: 600, background: T.bgCard, borderRadius: 6, padding: "2px 8px", maxWidth: 60, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            title={fileName}
+          >
+            {fileName.slice(0, 4)}
+          </span>
+        )}
+        {/* Pagination simplifiée */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8 }}>
+          <button className="page-btn" onClick={() => setPageIdx(0)} disabled={pageIdx === 0}>{"<<"}</button>
+          <button className="page-btn" onClick={() => setPageIdx(Math.max(0, pageIdx - 1))} disabled={pageIdx === 0}>{"<"}</button>
+          <span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{pageSize}</span>
+          <button className="page-btn" onClick={() => setPageIdx(Math.min(totalPages - 1, pageIdx + 1))} disabled={pageIdx >= totalPages - 1}>{">"}</button>
+          <button className="page-btn" onClick={() => setPageIdx(totalPages - 1)} disabled={pageIdx >= totalPages - 1}>{">>"}</button>
+        </div>
         <span style={{ color: "#7C3AED99", fontSize: 12, margin: "0 2px" }}>|</span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexShrink: 0 }}>
           <button className={`ste-btn${openToolbar ? " active" : ""}`} onClick={() => { setOpenToolbar((o) => !o); setOpenMouvements(false); }}>
@@ -317,6 +338,7 @@ export default function PointageTab() {
           </button>
         </div>
       </div>
+
 
       {/* Cadre Outils */}
       {openToolbar && (
@@ -509,6 +531,8 @@ export default function PointageTab() {
                   else if (ci === destIdxIcon && destIdxIcon !== -1) headerVal = iconMap['DEST'];
                   else if (ci === widthIdx && widthIdx !== -1) headerVal = iconMap['width'];
                   else if (ci === lengthIdx && lengthIdx !== -1) headerVal = iconMap['length'];
+                  // Si headerVal est 'col x', le remplacer par 'C x'
+                  if (/^col\s*\d+$/i.test(headerVal)) headerVal = headerVal.replace(/^col\s*(\d+)$/i, 'C $1');
                 } else {
                   // Mode nom uniquement : pas d'icône
                   // On retire toute icône potentielle du nom
