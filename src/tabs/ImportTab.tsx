@@ -403,10 +403,6 @@ export default function ImportPage() {
                         ) : (
                           <span onDoubleClick={() => setEditingHdr(i)} style={{ cursor: "text" }}>{h}</span>
                         )}
-                        <button
-                          onClick={() => deleteColumn(i)}
-                          style={{ background: "none", border: "none", color: T.error, cursor: "pointer", fontSize: 12, padding: "0 0 0 4px", lineHeight: 1, display: "flex", alignItems: "center" }}
-                        >✕</button>
                       </span>
                     );
                   })}
@@ -685,7 +681,12 @@ export default function ImportPage() {
                   ["🏗️ Colonne Destination", mapping.dch || "— non mappé"],
                   ["⚖️ Unité poids", poidsUnit === "kg" ? "Kilogrammes (kg)" : "Tonnes (t)"],
                   ["🔢 Réf. auto-groupée", autoRefFmt ? "Activé" : "Désactivé"],
-                  ...extras.filter((e) => e.label.trim()).map((e) => [`🔖 ${e.label}`, e.col ? e.col : "+ colonne vide"]),
+                  ...extras.filter((e) => e.label.trim()).map((e) => [
+                    `🔖 ${e.label}`,
+                    e.col ? e.col : "+ colonne vide"
+                  ]),
+                  ["Dernier déploiement", new Date().toLocaleString("fr-FR")],
+                  ["Dernier git push", "Voir la console ou l'historique git"],
                 ] as [string, string][]).map(([k, v]) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border2}33` }}>
                     <span style={{ color: T.textMuted, fontSize: 13 }}>{k}</span>
