@@ -1,7 +1,10 @@
 import { useState, useCallback, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
-import type { PointageData } from "./types";
-import { useWindowWidth } from "./useWindowWidth";
+// import type { PointageData } from "./types";
+// import { useWindowWidth } from "./useWindowWidth";
+import type { PointageData } from "../tabs/types";
+import { useWindowWidth } from "../tabs/useWindowWidth";
+
 
 type CellValue = string | number | boolean | null;
 type RawData = CellValue[][];

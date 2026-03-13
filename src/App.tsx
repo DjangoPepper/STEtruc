@@ -14,9 +14,6 @@ import RapportTab  from "./tabs/RapportTab";
 import ExportTab   from "./tabs/ExportTab";
 import ExcelCleaner from "./tabs/ExcelcleanerTab";
 
-// L'onglet IEC reste dans son dossier d'origine
-// import ExcelCleaner from "./IEC/new-exelcleaner";
-
 function IecPage() {
   return <ExcelCleaner dark={false} onDarkToggle={() => {}} onSendToPointage={() => {}} />;
 }
