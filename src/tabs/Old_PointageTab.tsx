@@ -120,24 +120,17 @@ export default function PointageTab() {
   const colLabel = (i: number): string => mappingLabels.get(i) ?? (i === destIdx ? "DEST" : headers[i]);
 
   const baseRows = allRows.map((row, ri) => ({ row, ri })).filter(({ ri }) => !hiddenRows.has(ri));
-  const filteredRows = baseRows.filter(({ row, ri }) =>
+  const filteredRows = baseRows.filter(({ row }) =>
     visibleCols.every((ci) => {
       const f = (colFilters[ci] ?? "").trim().toLowerCase();
       if (!f) return true;
-      // Pour la colonne Dest, la valeur réelle vient de rowDestinations
-      const cell = ci === destIdx ? (rowDestinations.get(ri) ?? row[ci]) : row[ci];
+      const cell = row[ci];
       return cell !== null && String(cell).toLowerCase().includes(f);
     })
   );
   const sortedRows = sortCol !== null
     ? [...filteredRows].sort((a, b) => {
-        // Pour la colonne Dest, comparer les valeurs de rowDestinations
-        const va = sortCol === destIdx
-          ? (rowDestinations.get(a.ri) ?? a.row[sortCol] ?? "")
-          : (a.row[sortCol] ?? "");
-        const vb = sortCol === destIdx
-          ? (rowDestinations.get(b.ri) ?? b.row[sortCol] ?? "")
-          : (b.row[sortCol] ?? "");
+        const va = a.row[sortCol] ?? ""; const vb = b.row[sortCol] ?? "";
         const na = Number(va), nb = Number(vb);
         const numCmp = !isNaN(na) && !isNaN(nb) ? na - nb : 0;
         const cmp = numCmp !== 0 ? numCmp : String(va).localeCompare(String(vb));
@@ -718,7 +711,7 @@ export default function PointageTab() {
                 </div>
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ color: T.textDim, fontSize: 10 }}>Annulation automatique dans…</span>
+                    <span style={{ color: T.textDim, fontSize: 10 }}>Confirmation automatique dans…</span>
                     <span style={{ color: T.warning, fontWeight: 800, fontSize: 14, fontFamily: "monospace" }}>{quickConfirmCountdown}s</span>
                   </div>
                   <div style={{ height: 6, borderRadius: 99, background: T.border, overflow: "hidden" }}>

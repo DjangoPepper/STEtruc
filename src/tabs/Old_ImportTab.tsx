@@ -3,7 +3,7 @@
 // ============================================================
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
-import { T, RawData, CellValue, ParsedData, applyGrouping, thsep, autoFormatRef } from "../types";
+import { T, RawData, CellValue, applyGrouping, thsep, autoFormatRef } from "../types";
 import { useApp } from "../AppContext";
 import { Btn } from "../components";
 

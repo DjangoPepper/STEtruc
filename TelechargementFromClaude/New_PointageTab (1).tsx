@@ -19,7 +19,7 @@ export default function PointageTab() {
     splitFormats, setSplitFormats,
     mapping, extras,
     pointedRows, setPointedRows,
-    rowOverrides,
+    rowOverrides, setRowOverrides,
     autoRefFmt, setAutoRefFmt,
     poidsUnit, setPoidsUnit,
     destinations, setDestinations,
