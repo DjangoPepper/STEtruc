@@ -218,11 +218,54 @@ export default function ExcelCleaner({ onSendToPointage }: ExcelCleanerProps) {
   const [sheetNames, setSheetNames]   = useState<string[]>([]);
   const [activeSheet, setActiveSheet] = useState<string | null>(null);
   const [parsed, setParsed]           = useState<ParsedData | null>(null);
-  const [hiddenCols, setHiddenCols]   = useState<Set<number>>(new Set());
-  const [hiddenRows, setHiddenRows]   = useState<Set<number>>(new Set());
   const [editingHeader, setEditingHeader] = useState<number | null>(null);
-  const [headers, setHeaders]         = useState<string[]>([]);
-  const [addedRows, setAddedRows]     = useState<CellValue[][]>([]);
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////  
+  // const [hiddenCols, setHiddenCols]   = useState<Set<number>>(new Set());
+  // const [hiddenRows, setHiddenRows]   = useState<Set<number>>(new Set());
+  // const [headers, setHeaders]         = useState<string[]>([]);
+  // const [addedRows, setAddedRows]     = useState<CellValue[][]>([]);
+  // Remplacer ces 4 lignes :
+
+  // Par :
+  const [sheetStates, setSheetStates] = useState<Record<string, {
+    hiddenCols: Set<number>;
+    hiddenRows: Set<number>;
+    headers: string[];
+    addedRows: CellValue[][];
+  }>>({});
+
+  const currentState = sheetStates[activeSheet ?? ""] ?? {
+    hiddenCols: new Set<number>(),
+    hiddenRows: new Set<number>(),
+    headers: parsed?.headers ?? [],
+    addedRows: [] as CellValue[][],
+  };
+  const hiddenCols = currentState.hiddenCols;
+  const hiddenRows = currentState.hiddenRows;
+  const headers    = currentState.headers;
+  const addedRows  = currentState.addedRows;
+
+  const updateSheetState = useCallback((
+    sheet: string,
+    patch: Partial<{ hiddenCols: Set<number>; hiddenRows: Set<number>; headers: string[]; addedRows: CellValue[][] }>
+  ) => {
+    setSheetStates(prev => ({
+      ...prev,
+      [sheet]: { ...(prev[sheet] ?? { hiddenCols: new Set(), hiddenRows: new Set(), headers: [], addedRows: [] }), ...patch }
+    }));
+  }, []);
+  
+
+  const setHiddenCols = (v: Set<number>) => activeSheet && updateSheetState(activeSheet, { hiddenCols: v });
+  const setHiddenRows = (v: Set<number>) => activeSheet && updateSheetState(activeSheet, { hiddenRows: v });
+  const setHeaders    = (v: string[])    => activeSheet && updateSheetState(activeSheet, { headers: v });
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////  
+  // const setAddedRows  = (fn: (p: CellValue[][]) => CellValue[][]) => activeSheet && updateSheetState(activeSheet, { addedRows: fn(addedRows) });
+  const setAddedRows = (fn: CellValue[][] | ((p: CellValue[][]) => CellValue[][])) =>
+  activeSheet && updateSheetState(activeSheet, {
+    addedRows: typeof fn === "function" ? fn(addedRows) : fn
+  });
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////  
   const [selectMode, setSelectMode]   = useState<"none" | "col" | "row">("none");
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [dimRepeated, setDimRepeated] = useState(true);
@@ -237,17 +280,40 @@ export default function ExcelCleaner({ onSendToPointage }: ExcelCleanerProps) {
     if (!parsed) return [];
     return [...addedRows, ...parsed.rows];
   }, [parsed, addedRows]);
-
+  //////////////////////////////////////////////////////////////////////////////////////////////////////
+  // const loadSheet = useCallback((wb: XLSX.WorkBook, sheetName: string) => {
+  //   const sheet = wb.Sheets[sheetName];
+  //   const raw: RawData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null }) as RawData;
+  //   const result = detectHeaders(raw);
+  //   setParsed(result);
+  //   setHeaders(result.headers);
+  //   setHiddenCols(new Set()); setHiddenRows(new Set());
+  //   setSelectMode("none"); setSelectedItems(new Set());
+  //   setEditingHeader(null); setAddedRows([]);
+  // }, []);
+  
   const loadSheet = useCallback((wb: XLSX.WorkBook, sheetName: string) => {
-    const sheet = wb.Sheets[sheetName];
-    const raw: RawData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null }) as RawData;
-    const result = detectHeaders(raw);
-    setParsed(result);
-    setHeaders(result.headers);
-    setHiddenCols(new Set()); setHiddenRows(new Set());
-    setSelectMode("none"); setSelectedItems(new Set());
-    setEditingHeader(null); setAddedRows([]);
-  }, []);
+  const sheet = wb.Sheets[sheetName];
+  const raw: RawData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null }) as RawData;
+  const result = detectHeaders(raw);
+  setParsed(result);
+  // Initialise seulement si pas déjà en mémoire
+  setSheetStates(prev => ({
+    ...prev,
+    [sheetName]: prev[sheetName] ?? {
+      hiddenCols: new Set<number>(),
+      hiddenRows: new Set<number>(),
+      headers: result.headers,
+      addedRows: [],
+    }
+  }));
+  setSelectMode("none");
+  setSelectedItems(new Set());
+  setEditingHeader(null);
+}, []);
+  //////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 
   const handleFile = useCallback((file: File) => {
     setFileName(file.name);
@@ -290,43 +356,90 @@ export default function ExcelCleaner({ onSendToPointage }: ExcelCleanerProps) {
     headers.forEach((_, ci) => map.set(ci, computeRepetitiveValues(allRows, ci)));
     return map;
   }, [parsed, headers, dimRepeated, allRows]);
+  /////////////////////////////////////////////////////////////////////////////////////////
+  // const applyColAction = () => {
+  //   if (selectMode !== "col") return;
+  //   setHiddenCols((prev) => new Set([...prev, ...selectedItems]));
+  //   setSelectedItems(new Set()); setSelectMode("none");
+  // };
+
+  // const applyRowDeletion = () => {
+  //   if (selectMode !== "row") return;
+  //   setHiddenRows((prev) => new Set([...prev, ...selectedItems]));
+  //   setSelectedItems(new Set()); setSelectMode("none");
+  // };
 
   const applyColAction = () => {
     if (selectMode !== "col") return;
-    setHiddenCols((prev) => new Set([...prev, ...selectedItems]));
+    setHiddenCols(new Set([...hiddenCols, ...selectedItems]));  // utilise hiddenCols directement
     setSelectedItems(new Set()); setSelectMode("none");
   };
 
   const applyRowDeletion = () => {
     if (selectMode !== "row") return;
-    setHiddenRows((prev) => new Set([...prev, ...selectedItems]));
+    setHiddenRows(new Set([...hiddenRows, ...selectedItems]));  // idem
     setSelectedItems(new Set()); setSelectMode("none");
   };
+/////////////////////////////////////////////////////////////////////////////////////////
 
+  //////////////////////////////////////////////////////////////////////////////////////////
+  // const exportClean = () => {
+  //   if (!workbook) return;
+  //   const wb2 = XLSX.utils.book_new();
+  //   const visibleSheets = sheetNames.filter((n) => !hiddenSheets.has(n));
+  //   visibleSheets.forEach((sheetName) => {
+  //     if (sheetName === activeSheet && parsed) {
+  //       const visibleHeaders = headers.filter((_, i) => !hiddenCols.has(i));
+  //       const visibleRows = allRows
+  //         .filter((_, i) => !hiddenRows.has(i))
+  //         .map((row) => {
+  //           const padded = [...row];
+  //           while (padded.length < headers.length) padded.push(null);
+  //           return padded.filter((_, ci) => !hiddenCols.has(ci));
+  //         });
+  //       const ws = XLSX.utils.aoa_to_sheet([visibleHeaders, ...visibleRows]);
+  //       XLSX.utils.book_append_sheet(wb2, ws, sheetName);
+  //     } else {
+  //       XLSX.utils.book_append_sheet(wb2, workbook.Sheets[sheetName], sheetName);
+  //     }
+  //   });
+  //   if (wb2.SheetNames.length === 0) return;
+  //   XLSX.writeFile(wb2, `${exportFileName.trim() || "données_nettoyées"}.xlsx`);
+  // };
   const exportClean = () => {
-    if (!workbook) return;
-    const wb2 = XLSX.utils.book_new();
-    const visibleSheets = sheetNames.filter((n) => !hiddenSheets.has(n));
-    visibleSheets.forEach((sheetName) => {
-      if (sheetName === activeSheet && parsed) {
-        const visibleHeaders = headers.filter((_, i) => !hiddenCols.has(i));
-        const visibleRows = allRows
-          .filter((_, i) => !hiddenRows.has(i))
-          .map((row) => {
-            const padded = [...row];
-            while (padded.length < headers.length) padded.push(null);
-            return padded.filter((_, ci) => !hiddenCols.has(ci));
-          });
-        const ws = XLSX.utils.aoa_to_sheet([visibleHeaders, ...visibleRows]);
-        XLSX.utils.book_append_sheet(wb2, ws, sheetName);
-      } else {
-        XLSX.utils.book_append_sheet(wb2, workbook.Sheets[sheetName], sheetName);
-      }
-    });
-    if (wb2.SheetNames.length === 0) return;
-    XLSX.writeFile(wb2, `${exportFileName.trim() || "données_nettoyées"}.xlsx`);
-  };
+  if (!workbook) return;
+  const wb2 = XLSX.utils.book_new();
+  const visibleSheets = sheetNames.filter((n) => !hiddenSheets.has(n));
+  visibleSheets.forEach((sheetName) => {
+    const state = sheetStates[sheetName];
+    // Si le sheet a été visité et modifié
+    if (state) {
+      const { hiddenCols: hc, hiddenRows: hr, headers: hdrs, addedRows: ar } = state;
+      // Recharger les données brutes de ce sheet
+      const sheet = workbook.Sheets[sheetName];
+      const raw: RawData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null }) as RawData;
+      const { rows: originalRows } = detectHeaders(raw);
+      const allRowsForSheet = [...ar, ...originalRows];
 
+      const visibleHeaders = hdrs.filter((_, i) => !hc.has(i));
+      const visibleRows = allRowsForSheet
+        .filter((_, i) => !hr.has(i))
+        .map((row) => {
+          const padded = [...row];
+          while (padded.length < hdrs.length) padded.push(null);
+          return padded.filter((_, ci) => !hc.has(ci));
+        });
+      const ws = XLSX.utils.aoa_to_sheet([visibleHeaders, ...visibleRows]);
+      XLSX.utils.book_append_sheet(wb2, ws, sheetName);
+    } else {
+      // Sheet jamais ouvert = aucune modification, export tel quel
+      XLSX.utils.book_append_sheet(wb2, workbook.Sheets[sheetName], sheetName);
+    }
+  });
+  if (wb2.SheetNames.length === 0) return;
+  XLSX.writeFile(wb2, `${exportFileName.trim() || "données_nettoyées"}.xlsx`);
+};
+  //////////////////////////////////////////////////////////////////////////////////////////
   const applySheetAction = () => {
     if (sheetSelectMode === "delete") {
       const next = new Set(hiddenSheets);
@@ -759,20 +872,20 @@ export default function ExcelCleaner({ onSendToPointage }: ExcelCleanerProps) {
 
               <div style={{ flex: 1 }} />
 
-              <Btn small onClick={() => setShowAddRow(true)}>+ Ligne</Btn>
+              <Btn small onClick={() => setShowAddRow(true)}>+1 Ligne</Btn>
               <Btn
                 small
                 variant={selectMode === "col" ? "accent" : "default"}
                 onClick={() => { setSelectMode(selectMode === "col" ? "none" : "col"); setSelectedItems(new Set()); }}
               >
-                {selectMode === "col" ? "✓ " : ""}Colonnes
+                {selectMode === "col" ? "✓ " : ""}-Colonnes
               </Btn>
               <Btn
                 small
                 variant={selectMode === "row" ? "accent" : "default"}
                 onClick={() => { setSelectMode(selectMode === "row" ? "none" : "row"); setSelectedItems(new Set()); }}
               >
-                {selectMode === "row" ? "✓ " : ""}Lignes
+                {selectMode === "row" ? "✓ " : ""}-Lignes
               </Btn>
               {selectedItems.size > 0 && (
                 <Btn
