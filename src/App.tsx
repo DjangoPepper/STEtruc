@@ -19,15 +19,29 @@ function IecPage() {
   return <ExcelCleaner dark={false} onDarkToggle={() => {}} onSendToPointage={() => {}} />;
 }
 
+
+import { useEffect } from "react";
+
 function AppInner() {
-  const { activeTab } = useApp();
+  const { activeTab, setActiveTab } = useApp();
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent;
+      if (custom.detail && custom.detail.tab) {
+        setActiveTab(custom.detail.tab);
+      }
+    };
+    window.addEventListener("STEtruc_setActiveTab", handler);
+    return () => window.removeEventListener("STEtruc_setActiveTab", handler);
+  }, [setActiveTab]);
 
   const pages: Record<Tab, React.ReactNode> = {
-    import:  <ImportTab />,
-    iec:     <IecPage />,
-    tableau: <PointageTab />,
-    rapport: <RapportTab />,
-    export:  <ExportTab />,
+    import:  <ImportTab />, 
+    iec:     <IecPage />, 
+    tableau: <PointageTab />, 
+    rapport: <RapportTab />, 
+    export:  <ExportTab />, 
   };
 
   return (

@@ -680,9 +680,12 @@ export default function ExcelCleaner({ onSendToPointage }: ExcelCleanerProps) {
           <Btn
             variant="success"
             small
-            title="Envoyer les données nettoyées vers l'onglet Pointage"
+            title="Enregistrer, envoyer et ouvrir Pointage"
             onClick={() => {
               if (!parsed) return;
+              // 1. Exporter le fichier Excel nettoyé
+              exportClean();
+              // 2. Préparer les données nettoyées pour PointageTab
               const visHdrs = headers.filter((_, i) => !hiddenCols.has(i));
               const visRows = allRows
                 .filter((_, i) => !hiddenRows.has(i))
@@ -692,6 +695,14 @@ export default function ExcelCleaner({ onSendToPointage }: ExcelCleanerProps) {
                   return padded.filter((_, ci) => !hiddenCols.has(ci));
                 });
               onSendToPointage({ headers: visHdrs, rows: visRows, fileName: fileName ?? "fichier" });
+              // 3. Basculer sur l'onglet Pointage
+              try {
+                // Utilise le contexte global si possible
+                const evt = new CustomEvent("STEtruc_setActiveTab", { detail: { tab: "tableau" } });
+                window.dispatchEvent(evt);
+              } catch (e) {
+                // fallback: rien
+              }
             }}
           >
             ↗ Pointage
