@@ -316,11 +316,22 @@ export default function PointageTab() {
             {fileName.slice(0, 4)}
           </span>
         )}
-        {/* Pagination simplifiée */}
+        {/* Pagination simplifiée avec pageSize éditable */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8 }}>
           <button className="page-btn" onClick={() => setPageIdx(0)} disabled={pageIdx === 0}>{"<<"}</button>
           <button className="page-btn" onClick={() => setPageIdx(Math.max(0, pageIdx - 1))} disabled={pageIdx === 0}>{"<"}</button>
-          <span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>{pageSize}</span>
+          <input
+            type="number"
+            min={1}
+            max={200}
+            value={pageSize}
+            onChange={e => {
+              const val = Math.max(1, Math.min(200, Number(e.target.value) || 1));
+              setPageSize(val);
+              setPageIdx(0);
+            }}
+            style={{ width: 48, fontSize: 12, fontWeight: 700, color: T.accent, background: T.bgCard, border: `1px solid ${T.border2}`, borderRadius: 6, padding: "2px 6px", textAlign: "center" }}
+          />
           <button className="page-btn" onClick={() => setPageIdx(Math.min(totalPages - 1, pageIdx + 1))} disabled={pageIdx >= totalPages - 1}>{">"}</button>
           <button className="page-btn" onClick={() => setPageIdx(totalPages - 1)} disabled={pageIdx >= totalPages - 1}>{">>"}</button>
         </div>
@@ -521,6 +532,7 @@ export default function PointageTab() {
                   'DEST': '🏁', // damier
                   'width': '↔️', // double flèche horizontale
                   'length': '↕️', // double flèche verticale
+                  'zone': '📦', // zone de stockage
                 };
                 let headerVal = colLabel(ci);
                 if (headerDisplay === 'icon') {
@@ -531,12 +543,14 @@ export default function PointageTab() {
                   else if (ci === destIdxIcon && destIdxIcon !== -1) headerVal = iconMap['DEST'];
                   else if (ci === widthIdx && widthIdx !== -1) headerVal = iconMap['width'];
                   else if (ci === lengthIdx && lengthIdx !== -1) headerVal = iconMap['length'];
+                  // Ajout zone de stockage
+                  else if (headers[ci] && /zone/i.test(headers[ci])) headerVal = iconMap['zone'];
                   // Si headerVal est 'col x', le remplacer par 'C x'
                   if (/^col\s*\d+$/i.test(headerVal)) headerVal = headerVal.replace(/^col\s*(\d+)$/i, 'C $1');
                 } else {
                   // Mode nom uniquement : pas d'icône
                   // On retire toute icône potentielle du nom
-                  headerVal = colLabel(ci).replace(/[🏷⚖️📍🏗️🏁↔️↕️]/g, "");
+                  headerVal = colLabel(ci).replace(/[🏷⚖️📍🏗️🏁↔️↕️📦]/g, "");
                 }
                   return (
                     <th key={ci} className={cls} style={{ width: colWidths.get(ci) ?? 60 }}>
