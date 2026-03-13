@@ -12,7 +12,8 @@ import ImportTab  from "./tabs/ImportTab";
 import PointageTab from "./tabs/PointageTab";
 import RapportTab  from "./tabs/RapportTab";
 import ExportTab   from "./tabs/ExportTab";
-import ExcelCleaner from "./tabs/ExcelcleanerTab";
+import ExcelCleaner from "./tabs/ExcelCleanerTab";
+
 
 function IecPage() {
   return <ExcelCleaner dark={false} onDarkToggle={() => {}} onSendToPointage={() => {}} />;

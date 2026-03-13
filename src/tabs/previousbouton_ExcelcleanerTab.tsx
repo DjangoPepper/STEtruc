@@ -1,12 +1,15 @@
 import { useState, useCallback, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
-import type { PointageData } from "./types";
+// import type { PointageData } from "./types";
+// import { useWindowWidth } from "./useWindowWidth";
+import type { PointageData } from "../tabs/types";
 import { useWindowWidth } from "../tabs/useWindowWidth";
+
 
 type CellValue = string | number | boolean | null;
 type RawData = CellValue[][];
 
-// ─── Palette navy STEtruc ──────────────────────────────────────────────────
+// ─── Palette navy STEtruc ────────────────────────────────────────────────── __
 const T = {
   bg:         "#0D1B2E",
   bgCard:     "#1A2535",
@@ -76,7 +79,7 @@ function Btn({
   children, onClick, variant = "default", small, title, style: extraStyle,
 }: {
   children: React.ReactNode;
-  onClick?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
+  onClick?: () => void;
   variant?: "default" | "accent" | "success" | "danger" | "ghost";
   small?: boolean;
   title?: string;
@@ -127,10 +130,7 @@ function Btn({
   return (
     <button
       style={{ ...base, ...variants[variant] }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick?.(e);
-      }}
+      onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       title={title}
@@ -652,26 +652,8 @@ export default function ExcelCleaner({ onSendToPointage }: ExcelCleanerProps) {
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
                   {sheetSelectMode === "none" ? (
                     <>
-                      <Btn
-                        small
-                        variant="danger"
-                        onClick={() => {
-                          setSheetSelectMode("delete");
-                          setSelectedSheets(new Set());
-                        }}
-                      >
-                        ✕ Supprimer onglets
-                      </Btn>
-                      <Btn
-                        small
-                        variant="success"
-                        onClick={() => {
-                          setSheetSelectMode("keep");
-                          setSelectedSheets(new Set());
-                        }}
-                      >
-                        ✓ Conserver onglets
-                      </Btn>
+                      <Btn small onClick={() => { setSheetSelectMode("delete"); setSelectedSheets(new Set()); }}>✕ Supprimer onglets</Btn>
+                      <Btn small onClick={() => { setSheetSelectMode("keep"); setSelectedSheets(new Set()); }}>✓ Conserver onglets</Btn>
                       {hiddenSheets.size > 0 && (
                         <Btn small onClick={() => setHiddenSheets(new Set())}>Restaurer onglets</Btn>
                       )}
@@ -690,15 +672,7 @@ export default function ExcelCleaner({ onSendToPointage }: ExcelCleanerProps) {
                           {sheetSelectMode === "delete" ? `Supprimer ${selectedSheets.size}` : `Garder ${selectedSheets.size}`}
                         </Btn>
                       )}
-                      <Btn
-                        small
-                        onClick={() => {
-                          setSheetSelectMode("none");
-                          setSelectedSheets(new Set());
-                        }}
-                      >
-                        Annuler
-                      </Btn>
+                      <Btn small onClick={() => { setSheetSelectMode("none"); setSelectedSheets(new Set()); }}>Annuler</Btn>
                     </>
                   )}
                 </div>
