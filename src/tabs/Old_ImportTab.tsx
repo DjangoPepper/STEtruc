@@ -3,8 +3,7 @@
 // ============================================================
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
-// import { T, RawData, CellValue, ParsedData, applyGrouping, thsep, autoFormatRef } from "../types";
-import { T, RawData, CellValue, applyGrouping, thsep, autoFormatRef } from "../types";
+import { T, RawData, CellValue, ParsedData, applyGrouping, thsep, autoFormatRef } from "../types";
 import { useApp } from "../AppContext";
 import { Btn } from "../components";
 
@@ -47,12 +46,12 @@ export default function ImportPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!parsed || headers.length === 0) return;
-    const allRows = parsed.rows.map((row) => {
+    const rows5 = parsed.rows.slice(0, 5).map((row) => {
       const obj: Record<string, string> = {};
       headers.forEach((h, i) => { obj[h] = row[i] !== null && row[i] !== undefined ? String(row[i]) : ""; });
       return obj;
     });
-    setEditableRows(allRows);
+    setEditableRows(rows5);
     setSplitFormats({});
     setMapping({
       rang:      headers.find((k) => /rang|row|line|ligne/i.test(k)) ?? "",
@@ -208,7 +207,7 @@ export default function ImportPage() {
                 background: T.bgDark, marginBottom: 16,
               }}
             >
-              <div style={{ fontSize: 96, marginBottom: 8 }}>📊</div>
+              <div style={{ fontSize: 48, marginBottom: 8 }}>📊</div>
               <div style={{ color: T.accent, fontWeight: 800, fontSize: 16, marginBottom: 4 }}>Charger fichier Excel</div>
               <div style={{ color: T.textDim, fontSize: 12 }}>.xlsx / .xls — colonnes et onglets vides auto-épurés</div>
             </div>
@@ -422,7 +421,7 @@ export default function ImportPage() {
                   style={{ padding: "10px 14px", background: T.bgCard, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
                 >
                   <span style={{ color: T.accent, fontWeight: 800, fontSize: 12, textTransform: "uppercase", flex: 1 }}>
-                    ✏️ Données ({editableRows.length} lignes)
+                    ✏️ Données — 5 premières lignes ({editableRows.length} total)
                   </span>
                   <span style={{ color: T.textDim, fontSize: 10 }}>Modifiables avant import</span>
                   <span style={{ color: T.textDim, fontSize: 10, opacity: 0.6, marginLeft: 4 }}>{openDonnees ? "▲" : "▼"}</span>
@@ -445,7 +444,7 @@ export default function ImportPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {editableRows.map((row, ri) => {
+                        {editableRows.slice(0, 5).map((row, ri) => {
                           const anomalous = anomalyInfo.isAnomalous(row);
                           return (
                             <tr key={ri} style={{ borderBottom: `1px solid ${T.border}22`, background: anomalous ? "#7C150822" : "transparent", outline: anomalous ? `1px solid ${T.error}33` : "none" }}>
@@ -555,7 +554,7 @@ export default function ImportPage() {
                   onClick={() => setOpenApercu((o) => !o)}
                   style={{ padding: "8px 12px", background: "#103848", borderBottom: openApercu ? `1px solid #1A5F7A55` : "none", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
                 >
-                  <span style={{ color: T.textDim, fontSize: 11, textTransform: "uppercase", fontWeight: 700, flex: 1 }}>Aperçu — {editableRows.length} lignes</span>
+                  <span style={{ color: T.textDim, fontSize: 11, textTransform: "uppercase", fontWeight: 700, flex: 1 }}>Aperçu — 5 premières lignes</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ color: T.textDim, fontSize: 10 }}>Cliquer sur un header pour grouper</span>
                     <button
@@ -615,7 +614,7 @@ export default function ImportPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {editableRows.map((row, ri) => (
+                        {editableRows.slice(0, 5).map((row, ri) => (
                           <tr key={ri} style={{ borderBottom: `1px solid ${T.border}22` }}>
                             <td style={{ color: T.textMuted, padding: "4px 6px", fontFamily: "monospace" }}>
                               {mapping.rang ? applyGrouping(row[mapping.rang] ?? "", splitFormats["rang"] || "") || "—" : "—"}
@@ -698,7 +697,7 @@ export default function ImportPage() {
                 <Btn
                   onClick={() => {
                     if (!parsed) return;
-                    const tail = parsed.rows.slice(editableRows.length);
+                    const tail = parsed.rows.slice(200);
                     const currentHeaders = headers;
                     let newRows: RawData = [
                       ...editableRows.map((rowObj) => currentHeaders.map((h) => { const v = rowObj[h] ?? ""; return v === "" ? null : v; })),
