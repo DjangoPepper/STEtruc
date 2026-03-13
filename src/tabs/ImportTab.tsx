@@ -194,6 +194,10 @@ export default function ImportPage() {
       </div>
 
       <div style={{ padding: 16 }}>
+        {/* Dernier git */}
+        <div style={{ color: T.textDim, fontSize: 12, marginBottom: 8 }}>
+          <span style={{ fontWeight: 700 }}>Dernier git :</span> 2026-03-13 21:46:13
+        </div>
 
         {/* ── STEP 1 ── */}
         {step === 1 && (
@@ -686,7 +690,7 @@ export default function ImportPage() {
                     e.col ? e.col : "+ colonne vide"
                   ]),
                   ["Dernier déploiement", new Date().toLocaleString("fr-FR")],
-                  ["Dernier git push", "Voir la console ou l'historique git"],
+                  ["Dernier git", "2026-03-13 21:46:13"],
                 ] as [string, string][]).map(([k, v]) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border2}33` }}>
                     <span style={{ color: T.textMuted, fontSize: 13 }}>{k}</span>
