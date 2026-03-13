@@ -15,8 +15,18 @@ import ExportTab   from "./tabs/ExportTab";
 import ExcelCleaner from "./tabs/ExcelCleanerTab";
 
 
+
+import { useApp as useAppContext } from "./AppContext";
+
 function IecPage() {
-  return <ExcelCleaner dark={false} onDarkToggle={() => {}} onSendToPointage={() => {}} />;
+  // Utilise le contexte global pour mettre à jour les données de pointage
+  const { setParsed, setHeaders, setFileName } = useAppContext();
+  const handleSendToPointage = (data: { headers: string[]; rows: any[][]; fileName: string }) => {
+    setParsed({ headers: data.headers, rows: data.rows, headerRowIndex: 0 });
+    setHeaders(data.headers);
+    setFileName(data.fileName);
+  };
+  return <ExcelCleaner dark={false} onDarkToggle={() => {}} onSendToPointage={handleSendToPointage} />;
 }
 
 
