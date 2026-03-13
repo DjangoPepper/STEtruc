@@ -8,6 +8,8 @@ import { useApp } from "../AppContext";
 import { Btn, EmptyState, PointageInfos, AddRowModal } from "../components";
 
 export default function PointageTab() {
+    // Affichage des headers : 'icon' ou 'name'
+    const [headerDisplay, setHeaderDisplay] = useState<'icon' | 'name'>('icon');
   const {
     parsed, headers,
     hiddenCols, setHiddenCols: _setHiddenCols, hiddenRows, setHiddenRows: _setHiddenRows,
@@ -101,7 +103,11 @@ export default function PointageTab() {
   };
 
   const prepaIdx = headers.findIndex((h) => /^prepa$/i.test(h.trim()));
-  const destIdx  = headers.findIndex((h) => /^dest(ination)?$/i.test(h.trim()));
+  // Déclaration unique des indices pour icônes
+  const destIdx = headers.findIndex(h => /destination|dest/i.test(h));
+  const widthIdx = headers.findIndex(h => /largeur|larg|width/i.test(h));
+  const lengthIdx = headers.findIndex(h => /longueur|long|length/i.test(h));
+  const destIdxIcon = destIdx;
   const visibleCols: number[] = headers.map((_, i) => i).filter((i) => !hiddenCols.has(i) && i !== prepaIdx);
   if (prepaIdx >= 0 && !hiddenCols.has(prepaIdx)) visibleCols.push(prepaIdx);
 
@@ -320,6 +326,10 @@ export default function PointageTab() {
           <button className="ste-btn" onClick={() => setPoidsUnit((u) => u === "t" ? "kg" : "t")} style={{ color: poidsUnit === "kg" ? T.warning : undefined, borderColor: poidsUnit === "kg" ? `${T.warning}66` : undefined }}>⚖️ {poidsUnit}</button>
           <button className={`ste-btn${selectMode === "col" ? " active" : ""}`} onClick={() => { setSelectMode(selectMode === "col" ? "none" : "col"); setSelectedItems(new Set()); }}>{selectMode === "col" ? "✓ " : ""}Col.</button>
           <button className={`ste-btn${selectMode === "row" ? " active" : ""}`} onClick={() => { setSelectMode(selectMode === "row" ? "none" : "row"); setSelectedItems(new Set()); }}>{selectMode === "row" ? "✓ " : ""}Lig.</button>
+          {/* Option d'affichage des headers */}
+          <div className={`dim-chip${headerDisplay === 'icon' ? ' on' : ''}`} onClick={() => setHeaderDisplay(headerDisplay === 'icon' ? 'name' : 'icon')} title="Afficher icône ou nom">
+            {headerDisplay === 'icon' ? '🖼️ Icônes uniquement' : '🔤 Noms uniquement'}
+          </div>
           {selectedItems.size > 0 && <button className="ste-btn danger" onClick={selectMode === "col" ? applyColAction : applyRowDeletion}>{selectMode === "col" ? `Masquer ${selectedItems.size} col.` : `Masquer ${selectedItems.size} lig.`}</button>}
           {(hiddenCols.size > 0 || hiddenRows.size > 0) && <button className="ste-btn" onClick={() => { _setHiddenCols(new Set()); _setHiddenRows(new Set()); }}>↺</button>}
           {sortCol !== null && <button className="ste-btn" onClick={() => { setSortCol(null); setPageIdx(0); }}>✕ Tri</button>}
@@ -480,20 +490,43 @@ export default function PointageTab() {
                 let cls = selectMode === "col" ? "th-col-sel" : "";
                 if (isSel) cls += " th-col-del";
                 if (isSortedCol) cls += " th-sorted";
-                return (
-                  <th key={ci} className={cls} style={{ width: colWidths.get(ci) ?? 60 }}>
-                    <div className="th-inner" onClick={() => handleSortCol(ci)}>
-                      {/* Désactive le renommage des headers */}
-                      <span style={{ flex: 1 }}>{colLabel(ci)}</span>
-                      {isSortedCol && <span style={{ fontSize: 9, flexShrink: 0 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
-                      {!isSortedCol && <span style={{ fontSize: 8, flexShrink: 0, opacity: 0.2 }}>⇅</span>}
-                    </div>
-                    <div className="th-filter">
-                      <input value={colFilters[ci] ?? ""} onChange={(e) => { setColFilters((p) => ({ ...p, [ci]: e.target.value })); setPageIdx(0); }} placeholder="…" onClick={(e) => e.stopPropagation()} />
-                    </div>
-                  </th>
-                );
-              })}
+                // Affichage header : icône ou nom uniquement
+                const iconMap: Record<string, string> = {
+                  'reference': '🏷',
+                  'poids': '⚖️',
+                  'rang': '📍',
+                  'dch': '🏗️',
+                  'DEST': '🏁', // damier
+                  'width': '↔️', // double flèche horizontale
+                  'length': '↕️', // double flèche verticale
+                };
+                let headerVal = colLabel(ci);
+                if (headerDisplay === 'icon') {
+                  if (ci === (mapping.reference ? headers.indexOf(mapping.reference) : -1)) headerVal = iconMap['reference'];
+                  else if (ci === (mapping.poids ? headers.indexOf(mapping.poids) : -1)) headerVal = iconMap['poids'];
+                  else if (ci === (mapping.rang ? headers.indexOf(mapping.rang) : -1)) headerVal = iconMap['rang'];
+                  else if (ci === (mapping.dch ? headers.indexOf(mapping.dch) : -1)) headerVal = iconMap['dch'];
+                  else if (ci === destIdxIcon && destIdxIcon !== -1) headerVal = iconMap['DEST'];
+                  else if (ci === widthIdx && widthIdx !== -1) headerVal = iconMap['width'];
+                  else if (ci === lengthIdx && lengthIdx !== -1) headerVal = iconMap['length'];
+                } else {
+                  // Mode nom uniquement : pas d'icône
+                  // On retire toute icône potentielle du nom
+                  headerVal = colLabel(ci).replace(/[🏷⚖️📍🏗️🏁↔️↕️]/g, "");
+                }
+                  return (
+                    <th key={ci} className={cls} style={{ width: colWidths.get(ci) ?? 60 }}>
+                      <div className="th-inner" onClick={() => handleSortCol(ci)}>
+                        <span style={{ flex: 1 }}>{headerVal}</span>
+                        {isSortedCol && <span style={{ fontSize: 9, flexShrink: 0 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                        {!isSortedCol && <span style={{ fontSize: 8, flexShrink: 0, opacity: 0.2 }}>⇅</span>}
+                      </div>
+                      <div className="th-filter">
+                        <input value={colFilters[ci] ?? ""} onChange={(e) => { setColFilters((p) => ({ ...p, [ci]: e.target.value })); setPageIdx(0); }} placeholder="…" onClick={(e) => e.stopPropagation()} />
+                      </div>
+                    </th>
+                  );
+                })}
             </tr>
           </thead>
           <tbody>
