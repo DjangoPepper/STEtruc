@@ -8,7 +8,8 @@ import { T, RawData, CellValue, applyGrouping, thsep, autoFormatRef } from "../t
 import { useApp } from "../AppContext";
 import { Btn } from "../components";
 
-export default function ImportPage() {
+// export default function ImportTab({ darkMode, setDarkMode }: { darkMode?: boolean; setDarkMode?: (v: boolean) => void } = {}) {
+export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode?: (v: boolean) => void } = {}) {
   const {
     handleFile, parsed, setParsed, fileName,
     sheetNames, activeSheet, setActiveSheet, workbook, loadSheet,
@@ -146,7 +147,7 @@ export default function ImportPage() {
   const STEP_LABELS = ["Fichier", "Colonnes", "Confirme"] as const;
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
+    <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: darkMode ? T.bg : '#F8FAFC' }}>
       {winwinModalOpen && (
         <div
           onClick={() => setWinwinModalOpen(false)}
@@ -159,10 +160,10 @@ export default function ImportPage() {
       )}
 
       {/* Header */}
-      <div style={{ padding: "16px 16px 12px", background: T.bgDark, borderBottom: `1px solid ${T.border}` }}>
-        <div style={{ color: T.textDim, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 4 }}>STEtruc</div>
-        <h1 style={{ color: T.text, fontSize: 20, fontWeight: 700 }}>Import</h1>
-        <div style={{ color: T.textMuted, fontSize: 11, marginTop: 2 }}>Chargez et configurez votre fichier Excel</div>
+      <div style={{ padding: "16px 16px 12px", background: darkMode ? T.bgDark : '#F1F5F9', borderBottom: `1px solid ${darkMode ? T.border : '#CBD5E1'}` }}>
+        <div style={{ color: darkMode ? T.textDim : '#64748B', fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 4 }}>STEtruc</div>
+        <h1 style={{ color: darkMode ? T.text : '#0F172A', fontSize: 20, fontWeight: 700 }}>Import</h1>
+        <div style={{ color: darkMode ? T.textMuted : '#64748B', fontSize: 11, marginTop: 2 }}>Chargez et configurez votre fichier Excel</div>
       </div>
 
       {/* Step indicator */}
@@ -667,70 +668,66 @@ export default function ImportPage() {
         )}
 
         {/* ── STEP 3 ── */}
-        {step === 3 && parsed && (() => {
-          const visibleCount = headers.filter((_, i) => !hiddenCols.has(i)).length;
-          const totalRows = parsed.rows.length;
-          return (
-            <div>
-              <div style={{ background: T.bgCard, borderRadius: 12, padding: 16, marginBottom: 14, border: `1px solid ${T.success}55` }}>
-                <div style={{ color: T.success, fontWeight: 800, fontSize: 16, marginBottom: 10 }}>✅ Prêt à analyser</div>
-                {([
-                  ["Fichier", fileName ?? "—"],
-                  ["Onglet actif", activeSheet ?? "—"],
-                  ["Colonnes importables", String(visibleCount)],
-                  ["Lignes totales", String(totalRows)],
-                  ["📍 Colonne Rang", mapping.rang || "— non mappé"],
-                  ["🏷 Colonne Référence", mapping.reference || "— non mappé"],
-                  ["⚖️ Colonne Poids", mapping.poids || "— non mappé"],
-                  ["🏗️ Colonne Destination", mapping.dch || "— non mappé"],
-                  ["⚖️ Unité poids", poidsUnit === "kg" ? "Kilogrammes (kg)" : "Tonnes (t)"],
-                  ["🔢 Réf. auto-groupée", autoRefFmt ? "Activé" : "Désactivé"],
-                  ...extras.filter((e) => e.label.trim()).map((e) => [
-                    `🔖 ${e.label}`,
-                    e.col ? e.col : "+ colonne vide"
-                  ]),
-                  ["Dernier déploiement", new Date().toLocaleString("fr-FR")],
-                  ["Dernier git", "2026-03-13 21:46:13"],
-                ] as [string, string][]).map(([k, v]) => (
-                  <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border2}33` }}>
-                    <span style={{ color: T.textMuted, fontSize: 13 }}>{k}</span>
-                    <span style={{ color: T.text, fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{v}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <Btn onClick={() => setStep(2)} color={T.border2} textColor={T.textMuted} fullWidth>← Retour</Btn>
-                <Btn
-                  onClick={() => {
-                    if (!parsed) return;
-                    const tail = parsed.rows.slice(editableRows.length);
-                    const currentHeaders = headers;
-                    let newRows: RawData = [
-                      ...editableRows.map((rowObj) => currentHeaders.map((h) => { const v = rowObj[h] ?? ""; return v === "" ? null : v; })),
-                      ...tail,
-                    ];
-                    const newHeaders = [...currentHeaders];
-                    extras.forEach((ex) => {
-                      const label = ex.label.trim() || "EXTRA";
-                      if (ex.col) {
-                        const idx = newHeaders.indexOf(ex.col);
-                        if (idx >= 0) newHeaders[idx] = label;
-                      } else {
-                        newHeaders.push(label);
-                        newRows = newRows.map((r) => [...r, null]);
-                      }
-                    });
-                    setHeaders(newHeaders);
-                    setParsed({ ...parsed, headers: newHeaders, rows: newRows });
-                    showToast("✅ Fichier prêt", "success");
-                    setActiveTab("tableau");
-                  }}
-                  color={T.success} textColor="#0F172A" fullWidth
-                >📊 Voir le pointage →</Btn>
-              </div>
+        {step === 3 && parsed && (
+          <div>
+            <div style={{ background: T.bgCard, borderRadius: 12, padding: 16, marginBottom: 14, border: `1px solid ${T.success}55` }}>
+              <div style={{ color: T.success, fontWeight: 800, fontSize: 16, marginBottom: 10 }}>✅ Prêt à analyser</div>
+              {([
+                ["Fichier", fileName ?? "—"],
+                ["Onglet actif", activeSheet ?? "—"],
+                ["Colonnes importables", String(headers.filter((_, i) => !hiddenCols.has(i)).length)],
+                ["Lignes totales", String(parsed.rows.length)],
+                ["📍 Colonne Rang", mapping.rang || "— non mappé"],
+                ["🏷 Colonne Référence", mapping.reference || "— non mappé"],
+                ["⚖️ Colonne Poids", mapping.poids || "— non mappé"],
+                ["🏗️ Colonne Destination", mapping.dch || "— non mappé"],
+                ["⚖️ Unité poids", poidsUnit === "kg" ? "Kilogrammes (kg)" : "Tonnes (t)"],
+                ["🔢 Réf. auto-groupée", autoRefFmt ? "Activé" : "Désactivé"],
+                ...extras.filter((e) => e.label.trim()).map((e) => [
+                  `🔖 ${e.label}`,
+                  e.col ? e.col : "+ colonne vide"
+                ]),
+                ["Dernier déploiement", new Date().toLocaleString("fr-FR")],
+                ["Dernier git", "2026-03-13 21:46:13"],
+              ] as [string, string][]).map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border2}33` }}>
+                  <span style={{ color: T.textMuted, fontSize: 13 }}>{k}</span>
+                  <span style={{ color: T.text, fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{v}</span>
+                </div>
+              ))}
             </div>
-          );
-        })()}
+            <div style={{ display: "flex", gap: 10 }}>
+              <Btn onClick={() => setStep(2)} color={T.border2} textColor={T.textMuted} fullWidth>← Retour</Btn>
+              <Btn
+                onClick={() => {
+                  if (!parsed) return;
+                  const tail = parsed.rows.slice(editableRows.length);
+                  const currentHeaders = headers;
+                  let newRows: RawData = [
+                    ...editableRows.map((rowObj) => currentHeaders.map((h) => { const v = rowObj[h] ?? ""; return v === "" ? null : v; })),
+                    ...tail,
+                  ];
+                  const newHeaders = [...currentHeaders];
+                  extras.forEach((ex) => {
+                    const label = ex.label.trim() || "EXTRA";
+                    if (ex.col) {
+                      const idx = newHeaders.indexOf(ex.col);
+                      if (idx >= 0) newHeaders[idx] = label;
+                    } else {
+                      newHeaders.push(label);
+                      newRows = newRows.map((r) => [...r, null]);
+                    }
+                  });
+                  setHeaders(newHeaders);
+                  setParsed({ ...parsed, headers: newHeaders, rows: newRows });
+                  showToast("✅ Fichier prêt", "success");
+                  setActiveTab("tableau");
+                }}
+                color={T.success} textColor="#0F172A" fullWidth
+              >📊 Voir le pointage →</Btn>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

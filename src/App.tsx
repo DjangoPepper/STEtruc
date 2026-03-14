@@ -30,10 +30,11 @@ function IecPage() {
 }
 
 
-import { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
 function AppInner() {
   const { activeTab, setActiveTab } = useApp();
+  const [darkMode, setDarkMode] = useState(true);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -58,15 +59,17 @@ function AppInner() {
     <div style={{
       display: "flex", flexDirection: "column",
       height: "100dvh", maxWidth: 540, margin: "0 auto",
-      background: T.bg, color: T.text,
+      background: darkMode ? T.bg : '#F8FAFC', color: darkMode ? T.text : '#0F172A',
       fontFamily: "'Share Tech Mono', 'IBM Plex Mono', 'Courier New', monospace",
       position: "relative", overflow: "hidden",
+      transition: 'background 0.2s, color 0.2s',
     }}>
       <Toast />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {/* Propagation du mode sombre/clair */}
         {pages[activeTab]}
       </div>
-      <BottomNav />
+      <BottomNav darkMode={darkMode} setDarkMode={setDarkMode} />
     </div>
   );
 }
