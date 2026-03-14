@@ -28,24 +28,22 @@ export function Toast() {
 // ─── Bottom Navigation ────────────────────────────────────────
 export function BottomNav() {
   const { activeTab, setActiveTab, parsed } = useApp();
-  const [darkMode, setDarkMode] = useState(true);
-  type Tab = "import" | "iec" | "tableau" | "rapport" | "export";
-  const tabs: { id: Tab; icon: string; label: string }[] = [
-    { id: "import",  icon: "⬇️",   label: "Import"   },
-    { id: "tableau", icon: "📊",   label: "Pointage" },
-    { id: "rapport", icon: "📋",   label: "Rapport"  },
-    { id: "export",  icon: "⬆️",   label: "Export"   },
+  const [dark, setDark] = useState(false);
+  const tabs = [
+    { id: "import", icon: "⬇️", label: "Import" },
+    { id: "tableau", icon: "📊", label: "Pointage" },
+    { id: "rapport", icon: "📋", label: "Rapport" },
+    { id: "export", icon: "⬆️", label: "Export" },
   ];
-  if (activeTab === "tableau") return null;
   return (
     <nav style={{
-      position: "fixed", bottom: 0, left: 0, right: 0, height: 54,
-      background: darkMode ? "#0F172A" : "#F8FAFC", borderTop: `2px solid ${darkMode ? T.border : '#CBD5E1'}`,
-      display: "flex", alignItems: "stretch", justifyContent: "space-between", zIndex: 100,
+      position: "fixed", bottom: 0, left: 0, right: 0, height: 64,
+      background: "#0F172A", borderTop: `2px solid ${T.border}`,
+      display: "flex", alignItems: "stretch", zIndex: 100,
       maxWidth: 540, margin: "0 auto",
-      gap: 1,
+      justifyContent: "space-between"
     }}>
-      {tabs.map((t, idx) => {
+      {tabs.map((t) => {
         const isActive = activeTab === t.id;
         const disabled = (t.id === "tableau" || t.id === "rapport" || t.id === "export") && !parsed;
         return (
@@ -55,15 +53,12 @@ export function BottomNav() {
             style={{
               flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
               justifyContent: "center", background: "none", border: "none",
-              color: disabled ? (darkMode ? T.textDim : '#64748B') : isActive ? (darkMode ? T.accent : '#0F172A') : (darkMode ? T.textDim : '#64748B'),
+              color: disabled ? T.textDim : isActive ? T.accent : T.textDim,
               fontSize: 11, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer",
-              gap: 0.5, // Réduit le gap entre icônes
-              letterSpacing: 0.5,
-              borderTop: isActive ? `3px solid ${darkMode ? T.accent : '#0F172A'}` : "3px solid transparent",
+              gap: 2, letterSpacing: 0.5,
+              borderTop: isActive ? `3px solid ${T.accent}` : "3px solid transparent",
               transition: "all 0.15s",
               fontFamily: "'Share Tech Mono', monospace",
-              minHeight: 44,
-              padding: '0 2px',
             }}
           >
             <span style={{ fontSize: 20 }}>{t.icon}</span>
@@ -71,28 +66,32 @@ export function BottomNav() {
           </button>
         );
       })}
-      {/* Bouton sombre/clair à droite de Export */}
       <button
-        onClick={() => setDarkMode((d) => !d)}
+        onClick={() => setDark((d) => !d)}
         style={{
-          marginLeft: 6,
-          background: darkMode ? T.bgCard : '#F1F5F9',
-          color: darkMode ? T.accent : '#0F172A',
-          border: `1px solid ${darkMode ? T.accent : '#CBD5E1'}`,
-          borderRadius: 8,
-          fontSize: 13,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "none",
+          border: "none",
+          color: dark ? "#FFD700" : "#7C3AED",
+          fontSize: 20,
           fontWeight: 700,
-          padding: '4px 10px',
-          cursor: 'pointer',
-          minWidth: 36,
-          alignSelf: 'center',
+          cursor: "pointer",
+          letterSpacing: 0.5,
+          borderTop: "3px solid transparent",
+          transition: "all 0.15s",
+          fontFamily: "'Share Tech Mono', monospace",
         }}
-        title={darkMode ? 'Mode sombre' : 'Mode clair'}
+        aria-label="Toggle theme"
       >
-        {darkMode ? '🌙' : '☀️'}
+        {dark ? "🌙" : "☀️"}
       </button>
     </nav>
   );
+  // IEC tab removed, sun/moon icon added, buttons justified
 }
 
 // ─── Page Header ──────────────────────────────────────────────

@@ -7,7 +7,7 @@ import { T, applyGrouping, thsep, autoFormatRef } from "../types";
 import { useApp } from "../AppContext";
 import { EmptyState } from "../components";
 
-export default function RapportTab({ darkMode, setDarkMode }: { darkMode?: boolean; setDarkMode?: (v: boolean) => void } = {}) {
+export default function RapportTab() {
   const {
     parsed, headers, allRows, hiddenRows,
     mapping, extras, splitFormats,
@@ -27,28 +27,12 @@ export default function RapportTab({ darkMode, setDarkMode }: { darkMode?: boole
   const [openPointees,     setOpenPointees]     = useState(true);
   const [openReaff,        setOpenReaff]        = useState(true);
 
-  const isDark = darkMode ?? true;
-  const theme = isDark ? T : {
-    ...T,
-    bg: '#F8FAFC',
-    bgCard: '#F3F4F6',
-    bgDark: '#E5E7EB',
-    border: '#CBD5E1',
-    border2: '#E5E7EB',
-    text: '#0F172A',
-    textMuted: '#64748B',
-    textDim: '#94A3B8',
-    repeatBg: '#E0E7FF',
-    selRowBg: '#E0E7FF',
-    selRowTxt: '#7C3AED',
-  };
-
   if (!parsed) {
     return (
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: theme.bg }}>
-        <div style={{ padding: "16px 16px 12px", background: theme.bgDark, borderBottom: `1px solid ${theme.border}` }}>
-          <div style={{ color: theme.textDim, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 4 }}>STEtruc</div>
-          <h1 style={{ color: theme.text, fontSize: 20, fontWeight: 700 }}>Rapport</h1>
+      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
+        <div style={{ padding: "16px 16px 12px", background: T.bgDark, borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ color: T.textDim, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 4 }}>STEtruc</div>
+          <h1 style={{ color: T.text, fontSize: 20, fontWeight: 700 }}>Rapport</h1>
         </div>
         <EmptyState icon="📋" text="Aucun fichier chargé" sub="Importez un fichier Excel d'abord" />
       </div>
@@ -103,12 +87,12 @@ export default function RapportTab({ darkMode, setDarkMode }: { darkMode?: boole
   );
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: theme.bg }}>
+    <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
       <div style={{ position: "relative" }}>
-        <div style={{ padding: "16px 16px 12px", background: theme.bgDark, borderBottom: `1px solid ${theme.border}` }}>
-          <div style={{ color: theme.textDim, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 4 }}>STEtruc</div>
-          <h1 style={{ color: theme.text, fontSize: 20, fontWeight: 700 }}>Rapport</h1>
-          <div style={{ color: theme.textMuted, fontSize: 11, marginTop: 2 }}>Synthèse pointage & mouvements</div>
+        <div style={{ padding: "16px 16px 12px", background: T.bgDark, borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ color: T.textDim, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 4 }}>STEtruc</div>
+          <h1 style={{ color: T.text, fontSize: 20, fontWeight: 700 }}>Rapport</h1>
+          <div style={{ color: T.textMuted, fontSize: 11, marginTop: 2 }}>Synthèse pointage & mouvements</div>
         </div>
         <button
           onClick={() => {
@@ -116,7 +100,7 @@ export default function RapportTab({ darkMode, setDarkMode }: { darkMode?: boole
             ["ste_tallyPrev","ste_chargementMaxi","ste_dechargementMaxi"].forEach(k => { try { localStorage.removeItem(k); } catch {} });
           }}
           title="Effacer toutes les valeurs saisies manuellement"
-          style={{ position: "absolute", top: 14, right: 12, background: `${theme.error}22`, border: `1px solid ${theme.error}55`, borderRadius: 8, color: theme.error, fontSize: 16, padding: "4px 10px", cursor: "pointer", lineHeight: 1 }}
+          style={{ position: "absolute", top: 14, right: 12, background: `${T.error}22`, border: `1px solid ${T.error}55`, borderRadius: 8, color: T.error, fontSize: 16, padding: "4px 10px", cursor: "pointer", lineHeight: 1 }}
         >🗑</button>
       </div>
 
@@ -124,15 +108,15 @@ export default function RapportTab({ darkMode, setDarkMode }: { darkMode?: boole
 
         {/* Mouvements */}
         {destStatsMap.size > 0 && (
-          <div style={{ background: theme.bgCard, borderRadius: 12, border: `1px solid #7C3AED66`, padding: "12px 14px", marginBottom: 12 }}>
+          <div style={{ background: T.bgCard, borderRadius: 12, border: `1px solid #7C3AED66`, padding: "12px 14px", marginBottom: 12 }}>
             <SectionHeader label="🏗️ Mouvements" open={openMouvements} toggle={() => setOpenMouvements(o => !o)} color="#A78BFA" />
             {openMouvements && (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
-                  <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
-                    <th style={{ textAlign: "left", color: theme.textDim, padding: "3px 8px 6px 0", fontWeight: 600 }}>Dest.</th>
-                    <th style={{ textAlign: "right", color: theme.textDim, padding: "3px 6px 6px", fontWeight: 600 }}>Qté</th>
-                    {poidsIdx >= 0 && <th style={{ textAlign: "right", color: theme.textDim, padding: "3px 0 6px 6px", fontWeight: 600 }}>Poids ({unitLabel})</th>}
+                  <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                    <th style={{ textAlign: "left", color: T.textDim, padding: "3px 8px 6px 0", fontWeight: 600 }}>Dest.</th>
+                    <th style={{ textAlign: "right", color: T.textDim, padding: "3px 6px 6px", fontWeight: 600 }}>Qté</th>
+                    {poidsIdx >= 0 && <th style={{ textAlign: "right", color: T.textDim, padding: "3px 0 6px 6px", fontWeight: 600 }}>Poids ({unitLabel})</th>}
                   </tr>
                 </thead>
                 <tbody>

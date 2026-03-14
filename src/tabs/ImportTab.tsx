@@ -8,8 +8,7 @@ import { T, RawData, CellValue, applyGrouping, thsep, autoFormatRef } from "../t
 import { useApp } from "../AppContext";
 import { Btn } from "../components";
 
-// export default function ImportTab({ darkMode, setDarkMode }: { darkMode?: boolean; setDarkMode?: (v: boolean) => void } = {}) {
-export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode?: (v: boolean) => void } = {}) {
+export default function ImportPage() {
   const {
     handleFile, parsed, setParsed, fileName,
     sheetNames, activeSheet, setActiveSheet, workbook, loadSheet,
@@ -147,7 +146,7 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
   const STEP_LABELS = ["Fichier", "Colonnes", "Confirme"] as const;
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: darkMode ? T.bg : '#F8FAFC' }}>
+    <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80, background: T.bg }}>
       {winwinModalOpen && (
         <div
           onClick={() => setWinwinModalOpen(false)}
@@ -160,10 +159,10 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
       )}
 
       {/* Header */}
-      <div style={{ padding: "16px 16px 12px", background: darkMode ? T.bgDark : '#F1F5F9', borderBottom: `1px solid ${darkMode ? T.border : '#CBD5E1'}` }}>
-        <div style={{ color: darkMode ? T.textDim : '#64748B', fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 4 }}>STEtruc</div>
-        <h1 style={{ color: darkMode ? T.text : '#0F172A', fontSize: 20, fontWeight: 700 }}>Import</h1>
-        <div style={{ color: darkMode ? T.textMuted : '#64748B', fontSize: 11, marginTop: 2 }}>Chargez et configurez votre fichier Excel</div>
+      <div style={{ padding: "16px 16px 12px", background: T.bgDark, borderBottom: `1px solid ${T.border}` }}>
+        <div style={{ color: T.textDim, fontSize: 9, letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 4 }}>STEtruc</div>
+        <h1 style={{ color: T.text, fontSize: 20, fontWeight: 700 }}>Import</h1>
+        <div style={{ color: T.textMuted, fontSize: 11, marginTop: 2 }}>Chargez et configurez votre fichier Excel</div>
       </div>
 
       {/* Step indicator */}
@@ -178,14 +177,13 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
                 flex: 1, textAlign: "center", padding: "10px 4px",
                 borderBottom: `3px solid ${step > i ? T.success : step === i + 1 ? T.accent : "transparent"}`,
                 cursor: reachable ? "pointer" : "default",
-                background: darkMode ? T.bgDark : '#F1F5F9',
               }}
             >
-              <div style={{ color: step > i ? T.success : step === i + 1 ? T.accent : (darkMode ? T.textDim : '#0F172A'), fontWeight: 800, fontSize: 12 }}>
+              <div style={{ color: step > i ? T.success : step === i + 1 ? T.accent : T.textDim, fontWeight: 800, fontSize: 12 }}>
                 <span style={{
                   display: "inline-block", width: 20, height: 20, borderRadius: "50%",
-                  background: step > i ? T.success : step === i + 1 ? T.accent : (darkMode ? T.border : '#CBD5E1'),
-                  color: darkMode ? "#0F172A" : '#0F172A', lineHeight: "20px", fontSize: 11, marginRight: 4,
+                  background: step > i ? T.success : step === i + 1 ? T.accent : T.border,
+                  color: "#0F172A", lineHeight: "20px", fontSize: 11, marginRight: 4,
                   fontWeight: 900, textAlign: "center",
                 }}>{i + 1}</span>
                 {l}
@@ -196,10 +194,7 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
       </div>
 
       <div style={{ padding: 16 }}>
-        {/* Dernier git */}
-        <div style={{ color: T.textDim, fontSize: 12, marginBottom: 8 }}>
-          <span style={{ fontWeight: 700 }}>Dernier git :</span> 2026-03-13 21:46:13
-        </div>
+        {/* ...existing code... */}
 
         {/* ── STEP 1 ── */}
         {step === 1 && (
@@ -211,7 +206,7 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
               style={{
                 border: `2px dashed ${T.accentDim}`, borderRadius: 14,
                 padding: "48px 24px", textAlign: "center", cursor: "pointer",
-                background: darkMode ? T.bgDark : '#F1F5F9', marginBottom: 16,
+                background: T.bgDark, marginBottom: 16,
               }}
             >
               <div style={{ fontSize: 96, marginBottom: 8 }}>📊</div>
@@ -226,8 +221,8 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
               onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
             />
             {parsed && (
-              <Btn onClick={() => setStep(2)} color={darkMode ? T.border2 : '#F1F5F9'} textColor={darkMode ? T.textMuted : '#0F172A'} fullWidth>
-                Reprendre le fichier actif →
+              <Btn onClick={() => setStep(2)} color={T.border2} textColor={T.textMuted} fullWidth>
+                ← Reprendre le fichier actif
               </Btn>
             )}
           </div>
@@ -235,10 +230,10 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
 
         {/* ── STEP 2 ── */}
         {step === 2 && parsed && (
-          <div style={{ background: darkMode ? T.bgDark : '#F1F5F9', borderRadius: 14, padding: 8 }}>
+          <div>
             {/* Sheet selector */}
             {sheetNames.length > 1 && (
-              <div style={{ marginBottom: 14, background: darkMode ? T.bgCard : '#F1F5F9', borderRadius: 12, padding: 14, border: `1px solid ${T.accentDim}` }}>
+              <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, padding: 14, border: `1px solid ${T.accentDim}` }}>
                 <div
                   onClick={() => setOpenOnglets((o) => !o)}
                   style={{ color: T.accent, fontWeight: 700, fontSize: 12, marginBottom: openOnglets ? 8 : 0, textTransform: "uppercase", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
@@ -348,7 +343,7 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
             })()}
 
             {/* Headers editor */}
-              <div style={{ marginBottom: 14, background: darkMode ? "#2A1020" : '#F1F5F9', borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
+            <div style={{ marginBottom: 14, background: "#2A1020", borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
               <div style={{ padding: "10px 14px", background: "#1C0A16", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                 <span style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
                   📋 Headers · {visibleCols.length}/{headers.length} colonnes
@@ -418,7 +413,7 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
 
             {/* Editable data preview */}
             {editableRows.length > 0 && (
-              <div style={{ marginBottom: 14, background: darkMode ? T.bgDark : '#F1F5F9', borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
+              <div style={{ marginBottom: 14, background: T.bgDark, borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
                 <div
                   onClick={() => setOpenDonnees((o) => !o)}
                   style={{ padding: "10px 14px", background: T.bgCard, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
@@ -669,66 +664,74 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
         )}
 
         {/* ── STEP 3 ── */}
-        {step === 3 && parsed && (
-          <div>
-            <div style={{ background: T.bgCard, borderRadius: 12, padding: 16, marginBottom: 14, border: `1px solid ${T.success}55` }}>
-              <div style={{ color: T.success, fontWeight: 800, fontSize: 16, marginBottom: 10 }}>✅ Prêt à analyser</div>
-              {([
-                ["Fichier", fileName ?? "—"],
-                ["Onglet actif", activeSheet ?? "—"],
-                ["Colonnes importables", String(headers.filter((_, i) => !hiddenCols.has(i)).length)],
-                ["Lignes totales", String(parsed.rows.length)],
-                ["📍 Colonne Rang", mapping.rang || "— non mappé"],
-                ["🏷 Colonne Référence", mapping.reference || "— non mappé"],
-                ["⚖️ Colonne Poids", mapping.poids || "— non mappé"],
-                ["🏗️ Colonne Destination", mapping.dch || "— non mappé"],
-                ["⚖️ Unité poids", poidsUnit === "kg" ? "Kilogrammes (kg)" : "Tonnes (t)"],
-                ["🔢 Réf. auto-groupée", autoRefFmt ? "Activé" : "Désactivé"],
-                ...extras.filter((e) => e.label.trim()).map((e) => [
-                  `🔖 ${e.label}`,
-                  e.col ? e.col : "+ colonne vide"
-                ]),
-                ["Dernier déploiement", new Date().toLocaleString("fr-FR")],
-                ["Dernier git", "2026-03-13 21:46:13"],
-              ] as [string, string][]).map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border2}33` }}>
-                  <span style={{ color: T.textMuted, fontSize: 13 }}>{k}</span>
-                  <span style={{ color: T.text, fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{v}</span>
-                </div>
-              ))}
+        {step === 3 && parsed && (() => {
+          const visibleCount = headers.filter((_, i) => !hiddenCols.has(i)).length;
+          const totalRows = parsed.rows.length;
+          return (
+            <div>
+              <div style={{ background: T.bgCard, borderRadius: 12, padding: 16, marginBottom: 14, border: `1px solid ${T.success}55` }}>
+                <div style={{ color: T.success, fontWeight: 800, fontSize: 16, marginBottom: 10 }}>✅ Prêt à analyser</div>
+                {([
+                  ["Fichier", fileName ?? "—"],
+                  ["Onglet actif", activeSheet ?? "—"],
+                  ["Colonnes importables", String(visibleCount)],
+                  ["Lignes totales", String(totalRows)],
+                  ["📍 Colonne Rang", mapping.rang || "— non mappé"],
+                  ["🏷 Colonne Référence", mapping.reference || "— non mappé"],
+                  ["⚖️ Colonne Poids", mapping.poids || "— non mappé"],
+                  ["🏗️ Colonne Destination", mapping.dch || "— non mappé"],
+                  ["⚖️ Unité poids", poidsUnit === "kg" ? "Kilogrammes (kg)" : "Tonnes (t)"],
+                  ["🔢 Réf. auto-groupée", autoRefFmt ? "Activé" : "Désactivé"],
+                  ...extras.filter((e) => e.label.trim()).map((e) => [
+                    `🔖 ${e.label}`,
+                    e.col ? e.col : "+ colonne vide"
+                  ]),
+                  ["Dernier déploiement", (() => {
+                    const d = new Date();
+                    const pad = (n: number) => n.toString().padStart(2, "0");
+                    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+                  })()],
+                  ["Dernier git", "2026-03-13 21:46:13"],
+                ] as [string, string][]).map(([k, v]) => (
+                  <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${T.border2}33` }}>
+                    <span style={{ color: T.textMuted, fontSize: 13 }}>{k}</span>
+                    <span style={{ color: T.text, fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <Btn onClick={() => setStep(2)} color={T.border2} textColor={T.textMuted} fullWidth>← Retour</Btn>
+                <Btn
+                  onClick={() => {
+                    if (!parsed) return;
+                    const tail = parsed.rows.slice(editableRows.length);
+                    const currentHeaders = headers;
+                    let newRows: RawData = [
+                      ...editableRows.map((rowObj) => currentHeaders.map((h) => { const v = rowObj[h] ?? ""; return v === "" ? null : v; })),
+                      ...tail,
+                    ];
+                    const newHeaders = [...currentHeaders];
+                    extras.forEach((ex) => {
+                      const label = ex.label.trim() || "EXTRA";
+                      if (ex.col) {
+                        const idx = newHeaders.indexOf(ex.col);
+                        if (idx >= 0) newHeaders[idx] = label;
+                      } else {
+                        newHeaders.push(label);
+                        newRows = newRows.map((r) => [...r, null]);
+                      }
+                    });
+                    setHeaders(newHeaders);
+                    setParsed({ ...parsed, headers: newHeaders, rows: newRows });
+                    showToast("✅ Fichier prêt", "success");
+                    setActiveTab("tableau");
+                  }}
+                  color={T.success} textColor="#0F172A" fullWidth
+                >📊 Voir le pointage →</Btn>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <Btn onClick={() => setStep(2)} color={T.border2} textColor={T.textMuted} fullWidth>← Retour</Btn>
-              <Btn
-                onClick={() => {
-                  if (!parsed) return;
-                  const tail = parsed.rows.slice(editableRows.length);
-                  const currentHeaders = headers;
-                  let newRows: RawData = [
-                    ...editableRows.map((rowObj) => currentHeaders.map((h) => { const v = rowObj[h] ?? ""; return v === "" ? null : v; })),
-                    ...tail,
-                  ];
-                  const newHeaders = [...currentHeaders];
-                  extras.forEach((ex) => {
-                    const label = ex.label.trim() || "EXTRA";
-                    if (ex.col) {
-                      const idx = newHeaders.indexOf(ex.col);
-                      if (idx >= 0) newHeaders[idx] = label;
-                    } else {
-                      newHeaders.push(label);
-                      newRows = newRows.map((r) => [...r, null]);
-                    }
-                  });
-                  setHeaders(newHeaders);
-                  setParsed({ ...parsed, headers: newHeaders, rows: newRows });
-                  showToast("✅ Fichier prêt", "success");
-                  setActiveTab("tableau");
-                }}
-                color={T.success} textColor="#0F172A" fullWidth
-              >📊 Voir le pointage →</Btn>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
