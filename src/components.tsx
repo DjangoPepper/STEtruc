@@ -32,18 +32,18 @@ export function BottomNav() {
   type Tab = "import" | "iec" | "tableau" | "rapport" | "export";
   const tabs: { id: Tab; icon: string; label: string }[] = [
     { id: "import",  icon: "⬇️",   label: "Import"   },
-    { id: "iec",     icon: "⬇️📊", label: "Iec"      },
     { id: "tableau", icon: "📊",   label: "Pointage" },
     { id: "rapport", icon: "📋",   label: "Rapport"  },
     { id: "export",  icon: "⬆️",   label: "Export"   },
   ];
+  if (activeTab === "tableau") return null;
   return (
     <nav style={{
       position: "fixed", bottom: 0, left: 0, right: 0, height: 54,
       background: darkMode ? "#0F172A" : "#F8FAFC", borderTop: `2px solid ${darkMode ? T.border : '#CBD5E1'}`,
-      display: "flex", alignItems: "stretch", zIndex: 100,
+      display: "flex", alignItems: "stretch", justifyContent: "space-between", zIndex: 100,
       maxWidth: 540, margin: "0 auto",
-      gap: 2,
+      gap: 1,
     }}>
       {tabs.map((t, idx) => {
         const isActive = activeTab === t.id;
@@ -57,7 +57,7 @@ export function BottomNav() {
               justifyContent: "center", background: "none", border: "none",
               color: disabled ? (darkMode ? T.textDim : '#64748B') : isActive ? (darkMode ? T.accent : '#0F172A') : (darkMode ? T.textDim : '#64748B'),
               fontSize: 11, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer",
-              gap: 1,
+              gap: 0.5, // Réduit le gap entre icônes
               letterSpacing: 0.5,
               borderTop: isActive ? `3px solid ${darkMode ? T.accent : '#0F172A'}` : "3px solid transparent",
               transition: "all 0.15s",
@@ -68,30 +68,29 @@ export function BottomNav() {
           >
             <span style={{ fontSize: 20 }}>{t.icon}</span>
             {t.label}
-            {/* Toggle sombre/clair à côté de Export */}
-            {t.id === "export" && (
-              <button
-                onClick={() => setDarkMode((d) => !d)}
-                style={{
-                  marginLeft: 8,
-                  background: darkMode ? T.bgCard : '#F1F5F9',
-                  color: darkMode ? T.accent : '#0F172A',
-                  border: `1px solid ${darkMode ? T.accent : '#CBD5E1'}`,
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  padding: '4px 10px',
-                  cursor: 'pointer',
-                  minWidth: 44,
-                }}
-                title={darkMode ? 'Mode sombre' : 'Mode clair'}
-              >
-                {darkMode ? '🌙' : '☀️'}
-              </button>
-            )}
           </button>
         );
       })}
+      {/* Bouton sombre/clair à droite de Export */}
+      <button
+        onClick={() => setDarkMode((d) => !d)}
+        style={{
+          marginLeft: 6,
+          background: darkMode ? T.bgCard : '#F1F5F9',
+          color: darkMode ? T.accent : '#0F172A',
+          border: `1px solid ${darkMode ? T.accent : '#CBD5E1'}`,
+          borderRadius: 8,
+          fontSize: 13,
+          fontWeight: 700,
+          padding: '4px 10px',
+          cursor: 'pointer',
+          minWidth: 36,
+          alignSelf: 'center',
+        }}
+        title={darkMode ? 'Mode sombre' : 'Mode clair'}
+      >
+        {darkMode ? '🌙' : '☀️'}
+      </button>
     </nav>
   );
 }

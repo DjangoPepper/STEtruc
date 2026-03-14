@@ -178,13 +178,14 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
                 flex: 1, textAlign: "center", padding: "10px 4px",
                 borderBottom: `3px solid ${step > i ? T.success : step === i + 1 ? T.accent : "transparent"}`,
                 cursor: reachable ? "pointer" : "default",
+                background: darkMode ? T.bgDark : '#F1F5F9',
               }}
             >
-              <div style={{ color: step > i ? T.success : step === i + 1 ? T.accent : T.textDim, fontWeight: 800, fontSize: 12 }}>
+              <div style={{ color: step > i ? T.success : step === i + 1 ? T.accent : (darkMode ? T.textDim : '#0F172A'), fontWeight: 800, fontSize: 12 }}>
                 <span style={{
                   display: "inline-block", width: 20, height: 20, borderRadius: "50%",
-                  background: step > i ? T.success : step === i + 1 ? T.accent : T.border,
-                  color: "#0F172A", lineHeight: "20px", fontSize: 11, marginRight: 4,
+                  background: step > i ? T.success : step === i + 1 ? T.accent : (darkMode ? T.border : '#CBD5E1'),
+                  color: darkMode ? "#0F172A" : '#0F172A', lineHeight: "20px", fontSize: 11, marginRight: 4,
                   fontWeight: 900, textAlign: "center",
                 }}>{i + 1}</span>
                 {l}
@@ -210,7 +211,7 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
               style={{
                 border: `2px dashed ${T.accentDim}`, borderRadius: 14,
                 padding: "48px 24px", textAlign: "center", cursor: "pointer",
-                background: T.bgDark, marginBottom: 16,
+                background: darkMode ? T.bgDark : '#F1F5F9', marginBottom: 16,
               }}
             >
               <div style={{ fontSize: 96, marginBottom: 8 }}>📊</div>
@@ -225,8 +226,8 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
               onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
             />
             {parsed && (
-              <Btn onClick={() => setStep(2)} color={T.border2} textColor={T.textMuted} fullWidth>
-                ← Reprendre le fichier actif
+              <Btn onClick={() => setStep(2)} color={darkMode ? T.border2 : '#F1F5F9'} textColor={darkMode ? T.textMuted : '#0F172A'} fullWidth>
+                Reprendre le fichier actif →
               </Btn>
             )}
           </div>
@@ -234,10 +235,10 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
 
         {/* ── STEP 2 ── */}
         {step === 2 && parsed && (
-          <div>
+          <div style={{ background: darkMode ? T.bgDark : '#F1F5F9', borderRadius: 14, padding: 8 }}>
             {/* Sheet selector */}
             {sheetNames.length > 1 && (
-              <div style={{ marginBottom: 14, background: T.bgCard, borderRadius: 12, padding: 14, border: `1px solid ${T.accentDim}` }}>
+              <div style={{ marginBottom: 14, background: darkMode ? T.bgCard : '#F1F5F9', borderRadius: 12, padding: 14, border: `1px solid ${T.accentDim}` }}>
                 <div
                   onClick={() => setOpenOnglets((o) => !o)}
                   style={{ color: T.accent, fontWeight: 700, fontSize: 12, marginBottom: openOnglets ? 8 : 0, textTransform: "uppercase", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
@@ -347,7 +348,7 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
             })()}
 
             {/* Headers editor */}
-            <div style={{ marginBottom: 14, background: "#2A1020", borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
+              <div style={{ marginBottom: 14, background: darkMode ? "#2A1020" : '#F1F5F9', borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
               <div style={{ padding: "10px 14px", background: "#1C0A16", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                 <span style={{ color: T.textMuted, fontWeight: 800, fontSize: 12, textTransform: "uppercase" }}>
                   📋 Headers · {visibleCols.length}/{headers.length} colonnes
@@ -417,7 +418,7 @@ export default function ImportTab({ darkMode}: { darkMode?: boolean; setDarkMode
 
             {/* Editable data preview */}
             {editableRows.length > 0 && (
-              <div style={{ marginBottom: 14, background: T.bgDark, borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
+              <div style={{ marginBottom: 14, background: darkMode ? T.bgDark : '#F1F5F9', borderRadius: 12, border: `1px solid ${T.border2}`, overflow: "hidden" }}>
                 <div
                   onClick={() => setOpenDonnees((o) => !o)}
                   style={{ padding: "10px 14px", background: T.bgCard, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}

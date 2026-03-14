@@ -31,6 +31,9 @@ export default function PointageTab() {
   } = useApp();
 
   const [showAddRow,  setShowAddRow]  = useState(false);
+  // Options d'affichage barre d'onglet et barre de navigation
+  const [showTabBar, setShowTabBar] = useState(true);
+  const [showBottomNav, setShowBottomNav] = useState(true);
   const [colFilters,  setColFilters]  = useState<Record<number, string>>({});
   const [sortCol,     setSortCol]     = useState<number | null>(null);
   const [sortDir,     setSortDir]     = useState<"asc" | "desc">("asc");
@@ -362,6 +365,13 @@ export default function PointageTab() {
           {/* Option d'affichage des headers */}
           <div className={`dim-chip${headerDisplay === 'icon' ? ' on' : ''}`} onClick={() => setHeaderDisplay(headerDisplay === 'icon' ? 'name' : 'icon')} title="Afficher icône ou nom">
             {headerDisplay === 'icon' ? '🖼️ Icônes uniquement' : '🔤 Noms uniquement'}
+          </div>
+          {/* Options afficher/masquer barre onglet et nav bas */}
+          <div className={`dim-chip${showTabBar ? ' on' : ''}`} onClick={() => setShowTabBar((v) => !v)} title="Afficher/masquer barre d'onglet">
+            {showTabBar ? '🗂️ Barre onglet' : '🚫 Barre onglet'}
+          </div>
+          <div className={`dim-chip${showBottomNav ? ' on' : ''}`} onClick={() => setShowBottomNav((v) => !v)} title="Afficher/masquer barre navigation bas">
+            {showBottomNav ? '⬇️ Nav bas' : '🚫 Nav bas'}
           </div>
           {selectedItems.size > 0 && <button className="ste-btn danger" onClick={selectMode === "col" ? applyColAction : applyRowDeletion}>{selectMode === "col" ? `Masquer ${selectedItems.size} col.` : `Masquer ${selectedItems.size} lig.`}</button>}
           {(hiddenCols.size > 0 || hiddenRows.size > 0) && <button className="ste-btn" onClick={() => { _setHiddenCols(new Set()); _setHiddenRows(new Set()); }}>↺</button>}
